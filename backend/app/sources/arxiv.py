@@ -42,10 +42,22 @@ class ArxivSource(BaseHttpSource):
         return self.settings.arxiv_min_interval_seconds
 
     async def search(self, query: SourceQuery) -> list[Paper]:
+        papers = await self._run_query(self._build_search_query(query.terms), query.limit)
+        if not papers:
+            # Same relaxation as PubMed: ANDing six terms across a preprint
+            # server matches nothing long before the topic runs out of
+            # relevant papers.
+            relaxed = self._build_search_query(query.terms, operator="OR")
+            if relaxed:
+                self._log.info("no matches for ANDed terms; relaxing to OR")
+                papers = await self._run_query(relaxed, query.limit)
+        return papers
+
+    async def _run_query(self, search_query: str, limit: int) -> list[Paper]:
         params = {
-            "search_query": self._build_search_query(query.terms),
+            "search_query": search_query,
             "start": 0,
-            "max_results": query.limit,
+            "max_results": limit,
             "sortBy": "relevance",
             "sortOrder": "descending",
         }
@@ -154,19 +166,19 @@ class ArxivSource(BaseHttpSource):
         return None
 
     @staticmethod
-    def _build_search_query(terms: str) -> str:
+    def _build_search_query(terms: str, operator: str = "AND") -> str:
         """Build an arXiv ``search_query`` expression.
 
-        Tokens are ANDed across all fields rather than sent as one quoted
+        Tokens are combined across all fields rather than sent as one quoted
         phrase: a phrase match on a multi-word topic returns almost nothing,
-        while ANDed terms behave like the topic search users expect.
+        while combined terms behave like the topic search users expect.
         """
         tokens = [token for token in re.split(r"\s+", terms.strip()) if token]
         if not tokens:
             return "all:*"
         # Quotes and backslashes would break out of the quoted field term.
         cleaned = [token.replace('"', "").replace("\\", "") for token in tokens[:12]]
-        return " AND ".join(f'all:"{token}"' for token in cleaned if token)
+        return f" {operator} ".join(f'all:"{token}"' for token in cleaned if token)
 
 
 def _parse_timestamp(value: str | None) -> date | None:

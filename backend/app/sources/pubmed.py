@@ -38,6 +38,11 @@ _MONTHS = {
 _SEASONS = {"spring": 4, "summer": 7, "fall": 10, "autumn": 10, "winter": 1}
 _YEAR_IN_TEXT = re.compile(r"(1[89]\d{2}|20\d{2})")
 
+#: Cap on terms sent upstream; beyond this an ANDed query matches nothing
+#: and an ORed one stops being about the query at all.
+_MAX_TERMS = 8
+_RELAXED_TERMS = 5
+
 
 class PubMedSource(BaseHttpSource):
     """Search PubMed through the E-utilities endpoints."""
@@ -50,10 +55,38 @@ class PubMedSource(BaseHttpSource):
         return 1 / 9 if self.settings.pubmed_api_key else 1 / 2.5
 
     async def search(self, query: SourceQuery) -> list[Paper]:
-        pmids = await self._esearch(query.terms, query.limit)
+        pmids = await self._esearch(self._strict_term(query), query.limit)
+        if not pmids:
+            # PubMed ANDs every term of a free-text query, so a natural
+            # topic phrase silently returns nothing once it gets specific
+            # enough. Relax to OR rather than reporting an empty result:
+            # retrieval should favour recall, because precision is the
+            # ranker's job downstream.
+            relaxed = self._relaxed_term(query)
+            if relaxed:
+                self._log.info("no matches for ANDed terms; relaxing to OR")
+                pmids = await self._esearch(relaxed, query.limit)
         if not pmids:
             return []
         return await self._efetch(pmids)
+
+    @staticmethod
+    def _strict_term(query: SourceQuery) -> str:
+        """All meaningful terms, ANDed.
+
+        Built from the parsed keywords rather than the raw text so that
+        stopwords do not become AND clauses of their own.
+        """
+        keywords = query.parsed.keywords[:_MAX_TERMS]
+        return " AND ".join(keywords) if keywords else query.terms
+
+    @staticmethod
+    def _relaxed_term(query: SourceQuery) -> str | None:
+        """The most distinctive terms, ORed. ``None`` if that adds nothing."""
+        keywords = query.parsed.keywords[:_RELAXED_TERMS]
+        if len(keywords) < 2:
+            return None
+        return " OR ".join(keywords)
 
     async def fetch_by_doi(self, doi: str) -> Paper | None:
         """PubMed indexes DOIs under the ``[doi]`` search field."""
