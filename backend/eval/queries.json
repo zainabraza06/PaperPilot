@@ -1,0 +1,58 @@
+[
+  {
+    "id": "prime-editing",
+    "query": "CRISPR prime editing efficiency in human cells",
+    "intent": "topic",
+    "domain": "biomedical",
+    "why": "Rare-acronym query. Tests whether the lexical signal keeps 'prime editing' distinct from the far larger 'CRISPR' literature, which a bi-encoder tends to collapse together."
+  },
+  {
+    "id": "transformer-attention",
+    "query": "transformer attention mechanism for language models",
+    "intent": "topic",
+    "domain": "machine learning",
+    "why": "arXiv-dominated. Tests ranking on a candidate set where almost everything is topically adjacent."
+  },
+  {
+    "id": "gnn-molecular",
+    "query": "graph neural networks for molecular property prediction",
+    "intent": "topic",
+    "domain": "cross-domain",
+    "why": "Spans CS and chemistry, so the candidate set is genuinely mixed across all three sources."
+  },
+  {
+    "id": "scrna-batch-effect",
+    "query": "single-cell RNA sequencing batch effect correction methods",
+    "intent": "topic",
+    "domain": "computational biology",
+    "why": "Methods query: the relevant papers are tool papers, not application papers that merely mention the method."
+  },
+  {
+    "id": "diffusion-image",
+    "query": "diffusion models for image generation",
+    "intent": "topic",
+    "domain": "machine learning",
+    "why": "Ambiguous term. 'Diffusion' also means molecular diffusion and diffusion MRI, so this tests whether context disambiguates."
+  },
+  {
+    "id": "sars-cov2-antibody",
+    "query": "SARS-CoV-2 spike protein neutralizing antibodies",
+    "intent": "topic",
+    "domain": "biomedical",
+    "why": "Huge, noisy literature. Tests ranking when the candidate set is uniformly on-topic but varies in usefulness."
+  },
+  {
+    "id": "protein-folding",
+    "query": "deep learning protein structure prediction AlphaFold",
+    "intent": "topic",
+    "domain": "cross-domain",
+    "why": "Named-entity query, split across biology and ML venues — the case where lexical matching on a proper noun should dominate."
+  },
+  {
+    "id": "abstract-snippet",
+    "query": "We present a method for correcting technical variation between batches of single-cell transcriptomic data. Our approach identifies mutual nearest neighbours between batches and uses them to estimate a correction vector, without requiring the populations to be shared across batches or the batches to be balanced in composition.",
+    "intent": "abstract_snippet",
+    "domain": "computational biology",
+    "why": "The pasted-abstract input mode. The upstream APIs only ever see distilled keywords; the ranker sees the full paragraph, which is precisely what the raw-text preservation in query_parser exists for."
+  }
+]
