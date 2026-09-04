@@ -175,3 +175,59 @@ def test_empty_input_is_handled() -> None:
     result = deduplicate([])
     assert result.papers == []
     assert result.duplicates_merged == 0
+
+
+# --- preprint / published pairs -----------------------------------------
+
+
+def test_a_preprint_and_its_published_version_merge() -> None:
+    # Real case from the demo: the JIVE batch-correction paper appeared at
+    # ranks 1 and 3 as a bioRxiv preprint and a Bioinformatics Advances
+    # article. Two DOIs, one paper.
+    papers = [
+        make_paper(
+            source=SourceName.CROSSREF,
+            title="Batch-effect correction in single-cell RNA sequencing data using JIVE",
+            doi="10.1093/bioadv/vbae134",
+            journal="Bioinformatics Advances",
+            source_id="1",
+        ),
+        make_paper(
+            source=SourceName.CROSSREF,
+            title="Batch-effect correction in single-cell RNA sequencing data using JIVE",
+            doi="10.1101/2023.10.25.563973",
+            source_id="2",
+        ),
+    ]
+    result = deduplicate(papers)
+    assert len(result.papers) == 1
+    # The published record is more complete, so it keeps the identity.
+    assert result.papers[0].doi == "10.1093/bioadv/vbae134"
+
+
+def test_the_preprint_exception_requires_an_exact_title_match() -> None:
+    # A DOI disagreement is strong evidence; only an exact title should be
+    # allowed to override it, never a fuzzy one.
+    papers = [
+        make_paper(
+            source=SourceName.CROSSREF,
+            title="Deep residual learning for image recognition",
+            doi="10.1109/cvpr.2016.90",
+            source_id="1",
+        ),
+        make_paper(
+            source=SourceName.ARXIV,
+            title="Deep residual learning for image recognitions",
+            doi="10.48550/arxiv.1512.03385",
+            source_id="2",
+        ),
+    ]
+    assert len(deduplicate(papers).papers) == 2
+
+
+def test_two_non_preprint_dois_still_veto_a_title_merge() -> None:
+    papers = [
+        make_paper(source=SourceName.CROSSREF, title="A study", doi="10.1234/abc", source_id="1"),
+        make_paper(source=SourceName.CROSSREF, title="A study", doi="10.5678/def", source_id="2"),
+    ]
+    assert len(deduplicate(papers).papers) == 2

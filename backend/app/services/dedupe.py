@@ -37,6 +37,22 @@ _TITLE_SIMILARITY_THRESHOLD = 0.94
 # fuzzy pass linear in practice instead of quadratic over the whole set.
 _BLOCK_PREFIX_LENGTH = 12
 
+# DOI registrant prefixes belonging to preprint servers. A preprint and its
+# published version are the *same work* with two different DOIs, which is the
+# one case where a DOI disagreement should not veto a title match: the veto
+# exists to keep errata and corrections separate from the papers they refer
+# to, and those are never registered under a preprint prefix.
+_PREPRINT_PREFIXES = (
+    "10.1101/",  # bioRxiv / medRxiv
+    "10.48550/",  # arXiv
+    "10.21203/",  # Research Square
+    "10.20944/",  # Preprints.org
+    "10.26434/",  # ChemRxiv
+    "10.31234/",  # PsyArXiv and other OSF preprint servers
+    "10.31235/",  # SocArXiv
+    "10.2139/",  # SSRN
+)
+
 # Tie-break when two records are equally complete: curated metadata first,
 # then registered metadata, then preprints.
 _SOURCE_PRIORITY = {
@@ -137,12 +153,35 @@ def _doi_compatible(paper: Paper, cluster: _Cluster) -> bool:
     """Reject a title-based match when the DOIs positively disagree.
 
     Errata, corrections and re-publications routinely share a title with
-    the work they refer to. Two records that both carry a DOI and disagree
-    are, by definition, two different registered works.
+    the work they refer to, so two records that both carry a DOI and
+    disagree are normally two different registered works.
+
+    The exception is a preprint and its published version: the same work,
+    deposited twice, under two DOIs. Left unmerged, the top of a ranked
+    result set shows the same paper twice — which is exactly the failure
+    deduplication exists to prevent. Merging is allowed when one side is a
+    preprint DOI *and* the normalized titles are identical, not merely
+    similar; fuzzy agreement is too weak a basis for overriding a DOI.
     """
     if not paper.doi:
         return True
-    return all(existing.doi in (None, paper.doi) for existing in cluster.papers)
+    return all(
+        existing.doi in (None, paper.doi) or _is_preprint_pair(paper, existing)
+        for existing in cluster.papers
+    )
+
+
+def _is_preprint_pair(left: Paper, right: Paper) -> bool:
+    """True when these are the preprint and published versions of one work."""
+    if not left.doi or not right.doi:
+        return False
+    if not (_is_preprint_doi(left.doi) or _is_preprint_doi(right.doi)):
+        return False
+    return bool(left.normalized_title) and left.normalized_title == right.normalized_title
+
+
+def _is_preprint_doi(doi: str) -> bool:
+    return doi.startswith(_PREPRINT_PREFIXES)
 
 
 def _index_cluster(
