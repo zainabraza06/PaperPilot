@@ -115,6 +115,21 @@ class SourceResult(BaseModel):
         )
 
 
+class RankingReport(BaseModel):
+    """Whether relevance ranking ran, and with what.
+
+    Reported for the same reason source failures are: the frontend needs to
+    tell a user "these results are in retrieval order, not relevance order"
+    rather than silently presenting a worse list as if it were ranked.
+    """
+
+    applied: bool
+    strategy: str | None = None
+    model: str | None = None
+    elapsed_ms: int = 0
+    reason: str | None = Field(default=None, description="Why ranking did not run.")
+
+
 class SearchRequest(BaseModel):
     """Inbound search parameters."""
 
@@ -135,6 +150,7 @@ class SearchResponse(BaseModel):
     sources: list[SourceReport]
     elapsed_ms: int
     duplicates_merged: int = 0
+    ranking: RankingReport = Field(default_factory=lambda: RankingReport(applied=False))
 
     @property
     def degraded(self) -> bool:

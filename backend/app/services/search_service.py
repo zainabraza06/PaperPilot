@@ -8,10 +8,12 @@ Responsibilities, in order:
 3. Turn any failure into a per-source status instead of an exception — a
    search that reaches two of three sources is a successful, degraded
    search, and the UI says so explicitly.
-4. Interleave, deduplicate, and return the merged set.
+4. Interleave, deduplicate, and hand the merged set to the ranker.
 
-Ranking is deliberately *not* done here; Stage 2 adds a separate ranking
-service that consumes this output.
+Retrieval and ranking stay separate: the ranker is injected, knows nothing
+about HTTP, and is evaluated on its own against a golden set. A search
+still returns results if the ranker is unavailable — in retrieval order,
+flagged as unranked, rather than not at all.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from app.models.paper import Paper, SourceName
 from app.models.search import (
     IdentifierKind,
     ParsedQuery,
+    RankingReport,
     SearchRequest,
     SearchResponse,
     SourceQuery,
@@ -41,6 +44,7 @@ from app.models.search import (
 )
 from app.services.dedupe import deduplicate
 from app.services.query_parser import parse_query
+from app.services.ranking.hybrid import HybridRanker
 from app.sources.base import PaperSource, SupportsArxivLookup, SupportsPmidLookup
 from app.sources.registry import SourceRegistry
 
@@ -50,9 +54,15 @@ logger = get_logger(__name__)
 class SearchService:
     """Runs a query across every registered source and merges the results."""
 
-    def __init__(self, registry: SourceRegistry, settings: Settings) -> None:
+    def __init__(
+        self,
+        registry: SourceRegistry,
+        settings: Settings,
+        ranker: HybridRanker | None = None,
+    ) -> None:
         self._registry = registry
         self._settings = settings
+        self._ranker = ranker
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         started = time.perf_counter()
@@ -71,15 +81,51 @@ class SearchService:
         )
 
         merged = deduplicate(_interleave(results))
+        papers, ranking = await self._rank(parsed, merged.papers)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
         return SearchResponse(
             query=parsed,
-            papers=merged.papers,
-            total=len(merged.papers),
+            papers=papers,
+            total=len(papers),
             sources=[result.to_report() for result in results],
             elapsed_ms=elapsed_ms,
             duplicates_merged=merged.duplicates_merged,
+            ranking=ranking,
+        )
+
+    async def _rank(
+        self, parsed: ParsedQuery, papers: list[Paper]
+    ) -> tuple[list[Paper], RankingReport]:
+        """Order the merged set by relevance, degrading to retrieval order.
+
+        The ranker is given ``parsed.raw`` — the user's original text,
+        including a full pasted abstract — not the distilled keyword string
+        that was sent upstream. Preserving the raw text for exactly this is
+        why the query parser keeps both.
+
+        A ranking failure is not a search failure: an unranked list of the
+        right papers is still useful, so the outcome is reported the same
+        way a source failure is.
+        """
+        if self._ranker is None or not papers:
+            return papers, RankingReport(
+                applied=False,
+                reason="ranking is disabled" if self._ranker is None else "no papers to rank",
+            )
+
+        started = time.perf_counter()
+        try:
+            ranked = await self._ranker.arank(parsed.raw, papers)
+        except Exception as exc:
+            logger.exception("ranking failed; returning retrieval order")
+            return papers, RankingReport(applied=False, reason=f"ranking failed: {exc}")
+
+        return ranked, RankingReport(
+            applied=True,
+            strategy=self._ranker.strategy.value,
+            model=self._ranker.model_id,
+            elapsed_ms=int((time.perf_counter() - started) * 1000),
         )
 
     # --- per-source execution ---------------------------------------------

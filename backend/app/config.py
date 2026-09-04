@@ -61,6 +61,26 @@ class Settings(BaseSettings):
     default_results_per_source: int = 20
     max_results_per_source: int = 100
 
+    # --- ranking (Stage 2) -------------------------------------------------
+    ranking_enabled: bool = True
+    embedding_model: str = Field(
+        default="all-MiniLM-L6-v2",
+        description=(
+            "sentence-transformers model id. Set empty to force the offline "
+            "hashing fallback, which ranks noticeably worse."
+        ),
+    )
+    ranking_strategy: str = Field(
+        default="linear",
+        description="Fusion strategy: semantic | lexical | linear | rrf.",
+    )
+    ranking_alpha: float = Field(
+        default=0.6,
+        ge=0.0,
+        le=1.0,
+        description="Weight on the semantic signal in linear fusion; lexical gets 1 - alpha.",
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

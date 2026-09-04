@@ -19,6 +19,8 @@ from app.core.errors import (
 )
 from app.models.paper import Paper, SourceName
 from app.models.search import SearchRequest, SourceQuery, SourceStatus
+from app.services.ranking.embeddings import HashingEmbedder
+from app.services.ranking.hybrid import HybridRanker
 from app.services.search_service import SearchService
 from app.sources.base import PaperSource
 
@@ -81,8 +83,10 @@ def make_paper(source: SourceName, n: int, doi: str | None = None) -> Paper:
     )
 
 
-def build_service(sources: list[PaperSource], settings: Settings) -> SearchService:
-    return SearchService(FakeRegistry(sources), settings)  # type: ignore[arg-type]
+def build_service(
+    sources: list[PaperSource], settings: Settings, ranker: HybridRanker | None = None
+) -> SearchService:
+    return SearchService(FakeRegistry(sources), settings, ranker)  # type: ignore[arg-type]
 
 
 async def test_all_sources_are_queried_concurrently(settings: Settings) -> None:
@@ -231,3 +235,109 @@ async def test_the_per_source_limit_is_passed_through(settings: Settings) -> Non
         SearchRequest(query="crispr", limit_per_source=7)
     )
     assert source.search_calls[0].limit == 7
+
+
+# --- ranking integration -------------------------------------------------
+
+
+def make_titled_paper(source: SourceName, n: int, title: str, abstract: str) -> Paper:
+    return Paper(
+        id=f"{source.value}:{n}",
+        source=source,
+        source_id=str(n),
+        title=title,
+        abstract=abstract,
+        url=f"https://example.org/{n}",
+    )
+
+
+async def test_results_are_reordered_by_relevance_when_a_ranker_is_present(
+    settings: Settings,
+) -> None:
+    papers = [
+        make_titled_paper(SourceName.ARXIV, 1, "Solar cell efficiency", "photovoltaic silicon"),
+        make_titled_paper(SourceName.ARXIV, 2, "Antenna arrays", "beamforming design"),
+        make_titled_paper(SourceName.ARXIV, 3, "Ocean acidification", "coral reef surveys"),
+        make_titled_paper(
+            SourceName.ARXIV, 4, "Prime editing efficiency", "prime editing in human cells"
+        ),
+    ]
+    service = build_service(
+        [FakeSource(SourceName.ARXIV, papers)], settings, HybridRanker(HashingEmbedder())
+    )
+    response = await service.search(SearchRequest(query="prime editing"))
+
+    assert response.papers[0].title == "Prime editing efficiency"
+    assert response.ranking.applied is True
+    assert response.ranking.strategy == "linear"
+    assert response.ranking.model.startswith("hashing-")
+
+
+async def test_every_returned_paper_carries_a_score(settings: Settings) -> None:
+    papers = [make_paper(SourceName.ARXIV, n) for n in range(3)]
+    service = build_service(
+        [FakeSource(SourceName.ARXIV, papers)], settings, HybridRanker(HashingEmbedder())
+    )
+    response = await service.search(SearchRequest(query="arxiv paper"))
+
+    assert all(paper.score is not None for paper in response.papers)
+    assert [paper.score.rank for paper in response.papers] == [1, 2, 3]
+
+
+async def test_the_ranker_sees_the_raw_query_not_the_distilled_keywords(
+    settings: Settings,
+) -> None:
+    """The reason ParsedQuery keeps ``raw`` at all.
+
+    Upstream APIs get a keyword string because none of them accepts a
+    paragraph; the ranker gets the whole pasted abstract, which is what
+    makes semantic matching on a snippet work.
+    """
+    seen: list[str] = []
+
+    class RecordingRanker(HybridRanker):
+        async def arank(self, query: str, papers):  # type: ignore[no-untyped-def]
+            seen.append(query)
+            return list(papers)
+
+    abstract = (
+        "We present a method for correcting technical variation between batches of "
+        "single-cell transcriptomic data using mutual nearest neighbours to estimate "
+        "a correction vector without requiring shared populations across batches."
+    )
+    service = build_service(
+        [FakeSource(SourceName.ARXIV, [make_paper(SourceName.ARXIV, 1)])],
+        settings,
+        RecordingRanker(HashingEmbedder()),
+    )
+    response = await service.search(SearchRequest(query=abstract))
+
+    assert seen == [abstract]
+    assert response.query.search_terms != abstract
+    assert len(response.query.search_terms.split()) <= 10
+
+
+async def test_a_ranking_failure_degrades_to_retrieval_order(settings: Settings) -> None:
+    class BrokenRanker(HybridRanker):
+        async def arank(self, query: str, papers):  # type: ignore[no-untyped-def]
+            raise RuntimeError("model exploded")
+
+    papers = [make_paper(SourceName.ARXIV, n) for n in range(3)]
+    service = build_service(
+        [FakeSource(SourceName.ARXIV, papers)], settings, BrokenRanker(HashingEmbedder())
+    )
+    response = await service.search(SearchRequest(query="crispr"))
+
+    # An unranked list of the right papers still beats no results at all.
+    assert response.total == 3
+    assert response.ranking.applied is False
+    assert "model exploded" in response.ranking.reason
+
+
+async def test_ranking_disabled_is_reported_rather_than_hidden(settings: Settings) -> None:
+    service = build_service([FakeSource(SourceName.ARXIV, [make_paper(SourceName.ARXIV, 1)])], settings)
+    response = await service.search(SearchRequest(query="crispr"))
+
+    assert response.ranking.applied is False
+    assert response.ranking.reason == "ranking is disabled"
+    assert response.papers[0].score is None
