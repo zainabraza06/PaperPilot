@@ -1,0 +1,47 @@
+[project]
+name = "paperpilot"
+version = "0.1.0"
+description = "AI-powered scientific literature search across PubMed, arXiv and Crossref."
+requires-python = ">=3.11"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+filterwarnings = ["error::RuntimeWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+    # Long lines are already capped by the formatter; E501 only fires on
+    # unbreakable strings such as URLs in docstrings.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests deliberately reach into private helpers and use magic values.
+"tests/*" = ["S101", "SLF001"]
+# FastAPI's Depends()/Query() defaults are function calls by design.
+"app/api/*" = ["B008"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = []
+
+[[tool.mypy.overrides]]
+module = ["defusedxml.*", "respx.*"]
+ignore_missing_imports = true

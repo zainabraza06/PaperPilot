@@ -1,0 +1,8 @@
+# --- runtime -----------------------------------------------------------
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+httpx==0.28.1
+# Hardened XML parsing for the PubMed (MEDLINE XML) and arXiv (Atom) feeds.
+defusedxml==0.7.1
