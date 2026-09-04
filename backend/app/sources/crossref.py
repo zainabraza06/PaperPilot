@@ -26,6 +26,51 @@ from app.models.paper import Author, Paper, SourceName, make_paper_id
 from app.models.search import SourceQuery
 from app.sources.base import BaseHttpSource
 
+# Crossref indexes far more than papers, and the non-paper records are not
+# harmless noise: a `peer-review` record's title *quotes the reviewed paper's
+# title*, so "Decision letter: Escape from neutralizing antibodies by SARS-CoV-2
+# spike..." scores at or near the top on every relevance signal there is. On one
+# evaluation query, all eight Crossref results were review reports. `component`
+# records are figures and supplementary files; the container types are journals
+# and volumes rather than anything inside them.
+#
+# The allow-list is applied server-side, so the row budget is spent on usable
+# records instead of being silently eaten by junk. Filtering at the source
+# rather than in the ranker is deliberate: a ranker cannot fix bad candidates,
+# it can only reorder them.
+_ALLOWED_TYPES = (
+    "journal-article",
+    "posted-content",  # preprints
+    "proceedings-article",
+    "book-chapter",
+    "monograph",
+    "reference-entry",
+    "report",
+    "dissertation",
+)
+
+#: Repeated same-field filters are OR-ed by the Crossref API.
+_TYPE_FILTER = ",".join(f"type:{name}" for name in _ALLOWED_TYPES)
+
+#: Defence in depth for paths with no server-side filter, such as DOI lookup.
+_EXCLUDED_TYPES = frozenset(
+    {
+        "peer-review",
+        "component",
+        "grant",
+        "dataset",
+        "standard",
+        "journal",
+        "journal-issue",
+        "journal-volume",
+        "book-series",
+        "book-set",
+        "proceedings",
+        "proceedings-series",
+        "report-series",
+    }
+)
+
 # Trimming the payload to the fields we model keeps responses far smaller.
 _SELECT_FIELDS = ",".join(
     [
@@ -63,6 +108,7 @@ class CrossrefSource(BaseHttpSource):
         params: dict[str, Any] = {
             "query.bibliographic": query.terms,
             "rows": query.limit,
+            "filter": _TYPE_FILTER,
             "select": _SELECT_FIELDS,
             "sort": "relevance",
             "order": "desc",
@@ -118,11 +164,14 @@ class CrossrefSource(BaseHttpSource):
 
     def parse_work(self, item: dict[str, Any]) -> Paper | None:
         """Normalize one Crossref work. Returns ``None`` if unusably sparse."""
+        if item.get("type") in _EXCLUDED_TYPES:
+            return None
+
         title = _first_string(item.get("title"))
         doi = item.get("DOI")
         if not title or not doi:
-            # Crossref also carries datasets, components and stub records
-            # with no title; without one there is nothing to rank or cite.
+            # Crossref also carries stub records with no title at all;
+            # without one there is nothing to rank, display or cite.
             return None
         doi = str(doi)
 
