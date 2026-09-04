@@ -8,7 +8,10 @@ standard library only if it is not installed, and say so loudly.
 
 from __future__ import annotations
 
+from typing import cast
 from xml.etree.ElementTree import Element
+
+__all__ = ["HARDENED", "Element", "parse_xml", "text_of"]
 
 try:  # pragma: no cover - exercised by whichever branch is installed
     from defusedxml.ElementTree import fromstring as _fromstring
@@ -29,7 +32,8 @@ except ImportError:  # pragma: no cover
 
 def parse_xml(payload: str | bytes) -> Element:
     """Parse an XML document and return its root element."""
-    return _fromstring(payload)
+    # defusedxml ships no type information; this is the one place we assert it.
+    return cast(Element, _fromstring(payload))
 
 
 def text_of(element: Element | None) -> str | None:

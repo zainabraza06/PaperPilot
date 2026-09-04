@@ -41,7 +41,7 @@ from app.models.search import (
 )
 from app.services.dedupe import deduplicate
 from app.services.query_parser import parse_query
-from app.sources.base import PaperSource
+from app.sources.base import PaperSource, SupportsArxivLookup, SupportsPmidLookup
 from app.sources.registry import SourceRegistry
 
 logger = get_logger(__name__)
@@ -163,16 +163,13 @@ class SearchService:
             return await source.fetch_by_doi(identifier)
 
         if kind is IdentifierKind.ARXIV:
-            fetch_arxiv = getattr(source, "fetch_by_arxiv_id", None)
-            if fetch_arxiv is not None:
-                return await fetch_arxiv(identifier)
+            if isinstance(source, SupportsArxivLookup):
+                return await source.fetch_by_arxiv_id(identifier)
             # Other sources index arXiv preprints under a DataCite DOI.
             return await source.fetch_by_doi(f"10.48550/arxiv.{identifier}")
 
-        if kind is IdentifierKind.PMID:
-            fetch_pmid = getattr(source, "fetch_by_pmid", None)
-            if fetch_pmid is not None:
-                return await fetch_pmid(identifier)
+        if kind is IdentifierKind.PMID and isinstance(source, SupportsPmidLookup):
+            return await source.fetch_by_pmid(identifier)
         return None
 
 

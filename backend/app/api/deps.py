@@ -7,7 +7,7 @@ from here, so routes never construct infrastructure themselves.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import Depends, Request
 
@@ -17,11 +17,14 @@ from app.sources.registry import SourceRegistry
 
 
 def get_registry(request: Request) -> SourceRegistry:
-    return request.app.state.registry
+    """Read the registry built during application startup."""
+    # Starlette's State is an untyped attribute bag by design.
+    return cast(SourceRegistry, request.app.state.registry)
 
 
 def get_search_service(request: Request) -> SearchService:
-    return request.app.state.search_service
+    """Read the search service built during application startup."""
+    return cast(SearchService, request.app.state.search_service)
 
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]

@@ -14,7 +14,7 @@ from __future__ import annotations
 import abc
 import asyncio
 import random
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 import httpx
 
@@ -59,6 +59,25 @@ class PaperSource(abc.ABC):
 
     async def aclose(self) -> None:  # noqa: B027 - optional hook, not every source holds resources
         """Release any held resources."""
+
+
+@runtime_checkable
+class SupportsArxivLookup(Protocol):
+    """A source with a native arXiv identifier index.
+
+    Optional capabilities are expressed as protocols rather than as methods
+    on ``PaperSource``: PubMed genuinely cannot resolve an arXiv id, and a
+    base-class method that always returns ``None`` would hide that.
+    """
+
+    async def fetch_by_arxiv_id(self, arxiv_id: str) -> Paper | None: ...
+
+
+@runtime_checkable
+class SupportsPmidLookup(Protocol):
+    """A source with a native PubMed identifier index."""
+
+    async def fetch_by_pmid(self, pmid: str) -> Paper | None: ...
 
 
 class BaseHttpSource(PaperSource):
