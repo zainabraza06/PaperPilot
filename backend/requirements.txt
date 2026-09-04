@@ -6,3 +6,12 @@ pydantic-settings==2.7.0
 httpx==0.28.1
 # Hardened XML parsing for the PubMed (MEDLINE XML) and arXiv (Atom) feeds.
 defusedxml==0.7.1
+
+# --- ranking (Stage 2) -------------------------------------------------
+# Bi-encoder embeddings for semantic relevance. Pulls in torch, which is
+# by far the heaviest dependency here; the app degrades to a hashing
+# fallback if the model cannot be loaded.
+sentence-transformers==3.3.1
+# Okapi BM25 for the lexical half of the hybrid.
+rank-bm25==0.2.2
+numpy>=1.26,<3

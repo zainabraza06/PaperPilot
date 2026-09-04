@@ -2,7 +2,7 @@
 name = "paperpilot"
 version = "0.1.0"
 description = "AI-powered scientific literature search across PubMed, arXiv and Crossref."
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -19,7 +19,7 @@ filterwarnings = ["error::RuntimeWarning"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
@@ -36,12 +36,12 @@ ignore = [
 "app/api/*" = ["B008"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
 plugins = []
 
 [[tool.mypy.overrides]]
-module = ["defusedxml.*", "respx.*"]
+module = ["defusedxml.*", "respx.*", "rank_bm25.*", "sentence_transformers.*"]
 ignore_missing_imports = true
