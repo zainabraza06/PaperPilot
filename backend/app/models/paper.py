@@ -25,6 +25,22 @@ class SourceName(str, Enum):
     CROSSREF = "crossref"
 
 
+class RelevanceScore(BaseModel):
+    """Why a paper ranked where it did.
+
+    The components are kept alongside the combined score, not discarded,
+    for two reasons: the UI shows a breakdown rather than an unexplained
+    number, and an evaluation run can attribute a ranking change to the
+    signal that caused it.
+    """
+
+    combined: float = Field(ge=0.0, le=1.0, description="Fused score, 0-1, for display.")
+    semantic: float = Field(description="Raw cosine similarity of query and paper embeddings.")
+    lexical: float = Field(description="Raw BM25 score, unbounded and corpus-relative.")
+    rank: int = Field(ge=1, description="1-based position in the ranked result set.")
+    strategy: str = Field(description="Fusion strategy that produced `combined`.")
+
+
 class Author(BaseModel):
     """A paper author.
 
@@ -105,6 +121,9 @@ class Paper(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     pdf_url: str | None = None
     citation_count: int | None = None
+
+    # --- ranking (populated by the ranker, absent before Stage 2 runs) ---
+    score: RelevanceScore | None = None
 
     # --- provenance (populated by the deduplicator) ----------------------
     also_found_in: list[SourceName] = Field(
