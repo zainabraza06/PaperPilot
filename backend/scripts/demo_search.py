@@ -1,15 +1,17 @@
-"""Live demo of the Stage 1 retrieval layer.
+"""Live demo of the retrieval and ranking pipeline.
 
-Runs one real query against PubMed, arXiv and Crossref concurrently and
-prints the merged, deduplicated result set together with a per-source
-report — including which sources failed and why.
+Runs one real query against PubMed, arXiv and Crossref concurrently, then
+ranks the merged set, and prints everything the pipeline decided along the
+way: how the query was classified, what each source did, how many
+duplicates collapsed, and the relevance score behind each position.
 
 Usage::
 
     python -m scripts.demo_search "prime editing in primary human cells"
     python -m scripts.demo_search "10.1038/s41587-022-01234-5"
-    python -m scripts.demo_search "attention is all you need" --limit 5
     python -m scripts.demo_search "CRISPR" --sources arxiv crossref
+    python -m scripts.demo_search "diffusion models" --strategy semantic
+    python -m scripts.demo_search "diffusion models" --no-rank   # A/B the ranker
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ from app.config import get_settings
 from app.core.logging import configure_logging
 from app.models.paper import Paper, SourceName
 from app.models.search import SearchRequest, SearchResponse, SourceStatus
+from app.services.ranking.embeddings import build_embedder
+from app.services.ranking.hybrid import FusionStrategy, HybridRanker
 from app.services.search_service import SearchService
 from app.sources.registry import SourceRegistry
 
@@ -56,13 +60,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--show", type=int, default=10, help="How many merged papers to print")
     parser.add_argument("--verbose", action="store_true", help="Show connector log output")
+    parser.add_argument(
+        "--strategy",
+        choices=[s.value for s in FusionStrategy],
+        help="Fusion strategy (default: from settings)",
+    )
+    parser.add_argument("--no-rank", action="store_true", help="Skip ranking entirely")
     return parser.parse_args(argv)
 
 
 async def run(args: argparse.Namespace) -> SearchResponse:
     settings = get_settings()
     registry = SourceRegistry(settings)
-    service = SearchService(registry, settings)
+
+    ranker = None
+    if not args.no_rank:
+        strategy = FusionStrategy(args.strategy or settings.ranking_strategy)
+        ranker = HybridRanker(
+            build_embedder(settings.embedding_model),
+            strategy=strategy,
+            alpha=settings.ranking_alpha,
+        )
+    service = SearchService(registry, settings, ranker)
     try:
         return await service.search(
             SearchRequest(
@@ -103,6 +122,15 @@ def print_response(response: SearchResponse, show: int) -> None:
     if response.degraded:
         print("           partial results: at least one source failed (see above)")
 
+    ranking = response.ranking
+    if ranking.applied:
+        print(
+            f"RANKED     {ranking.strategy} fusion on {ranking.model} "
+            f"in {ranking.elapsed_ms} ms"
+        )
+    else:
+        print(f"UNRANKED   retrieval order ({ranking.reason})")
+
     if not response.papers:
         print("\nNo papers found.")
         return
@@ -117,6 +145,15 @@ def print_paper(index: int, paper: Paper) -> None:
     year = paper.published_date.isoformat() if paper.published_date else "no date"
 
     print(f"\n{index:>2}. {textwrap.shorten(paper.title, width=72, placeholder=' …')}")
+    if paper.score:
+        # A bar rather than a bare number, with the two components beside it:
+        # this is how the frontend will present relevance too.
+        filled = round(paper.score.combined * 20)
+        bar = "#" * filled + "." * (20 - filled)
+        print(
+            f"    [{bar}] {paper.score.combined:.2f}"
+            f"   semantic={paper.score.semantic:+.3f}  bm25={paper.score.lexical:.2f}"
+        )
     print(f"    {badges}  |  {year}  |  {paper.journal or 'no venue'}")
     print(f"    {_format_authors(paper)}")
     print(f"    DOI: {paper.doi or '—'}")
