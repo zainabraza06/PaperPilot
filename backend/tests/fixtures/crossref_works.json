@@ -1,0 +1,67 @@
+{
+  "status": "ok",
+  "message-type": "work-list",
+  "message": {
+    "total-results": 4,
+    "items": [
+      {
+        "DOI": "10.1038/S41587-022-01234-5",
+        "title": ["Prime editing efficiency in primary human cells"],
+        "author": [
+          {
+            "given": "Wei",
+            "family": "Chen",
+            "affiliation": [{ "name": "Broad Institute" }]
+          },
+          { "given": "Adaeze", "family": "Okafor", "affiliation": [] }
+        ],
+        "abstract": "<jats:p>Prime editing enables <jats:italic>precise</jats:italic> genome edits without double-strand breaks.</jats:p>",
+        "issued": { "date-parts": [[2022, 7]] },
+        "container-title": ["Nature Biotechnology"],
+        "URL": "https://doi.org/10.1038/s41587-022-01234-5",
+        "type": "journal-article",
+        "publisher": "Springer Science and Business Media LLC",
+        "volume": "40",
+        "issue": "7",
+        "page": "1021-1030",
+        "subject": ["Biomedical Engineering", "Molecular Medicine"],
+        "is-referenced-by-count": 214,
+        "link": [
+          {
+            "URL": "https://www.nature.com/articles/s41587-022-01234-5.pdf",
+            "content-type": "application/pdf"
+          }
+        ]
+      },
+      {
+        "DOI": "10.1016/j.cell.2020.05.001",
+        "title": ["A record with no abstract deposited"],
+        "author": [{ "name": "The COVID-19 Genomics Consortium" }],
+        "issued": { "date-parts": [[null]] },
+        "published-print": { "date-parts": [[2020, 5, 14]] },
+        "container-title": [],
+        "URL": "https://doi.org/10.1016/j.cell.2020.05.001",
+        "type": "journal-article",
+        "publisher": "Elsevier BV"
+      },
+      {
+        "DOI": "10.5555/no-title-record",
+        "title": [],
+        "issued": { "date-parts": [[2018]] },
+        "type": "component"
+      },
+      {
+        "DOI": "10.1101/2021.01.01.425001",
+        "title": ["A preprint indexed with a year-only date"],
+        "author": [{ "given": "Ada", "family": "Lovelace" }],
+        "abstract": "Plain text abstract with no JATS wrapper at all.",
+        "issued": { "date-parts": [[2021]] },
+        "container-title": ["bioRxiv"],
+        "URL": "https://doi.org/10.1101/2021.01.01.425001",
+        "type": "posted-content",
+        "publisher": "Cold Spring Harbor Laboratory",
+        "is-referenced-by-count": 0
+      }
+    ]
+  }
+}

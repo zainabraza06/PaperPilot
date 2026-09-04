@@ -1,0 +1,142 @@
+<?xml version="1.0" ?>
+<!--
+  Trimmed but structurally faithful efetch response. The three records are
+  chosen to cover the awkward cases the parser must survive:
+    1. Complete record: DOI in ELocationID, structured abstract, full date.
+    2. No DOI in ELocationID (only in ArticleIdList), collective author,
+       inline markup in the title, free-text MedlineDate.
+    3. No abstract at all, no DOI anywhere, initials-only author.
+-->
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation Status="MEDLINE" Owner="NLM">
+      <PMID Version="1">35123456</PMID>
+      <Article PubModel="Print-Electronic">
+        <Journal>
+          <ISSN IssnType="Electronic">1546-1696</ISSN>
+          <JournalIssue CitedMedium="Internet">
+            <Volume>40</Volume>
+            <Issue>7</Issue>
+            <PubDate>
+              <Year>2022</Year>
+              <Month>Jul</Month>
+            </PubDate>
+          </JournalIssue>
+          <Title>Nature Biotechnology</Title>
+          <ISOAbbreviation>Nat Biotechnol</ISOAbbreviation>
+        </Journal>
+        <ArticleTitle>Prime editing efficiency in primary human cells.</ArticleTitle>
+        <Pagination>
+          <MedlinePgn>1021-1030</MedlinePgn>
+        </Pagination>
+        <ELocationID EIdType="doi" ValidYN="Y">10.1038/s41587-022-01234-5</ELocationID>
+        <Abstract>
+          <AbstractText Label="BACKGROUND">Prime editing enables precise genome edits without double-strand breaks.</AbstractText>
+          <AbstractText Label="METHODS">We benchmarked <i>PE2</i> and PE3 across six primary cell types.</AbstractText>
+          <AbstractText Label="RESULTS">Editing efficiency reached 42% in T cells with minimal indels.</AbstractText>
+        </Abstract>
+        <AuthorList CompleteYN="Y">
+          <Author ValidYN="Y">
+            <LastName>Chen</LastName>
+            <ForeName>Wei</ForeName>
+            <Initials>W</Initials>
+            <AffiliationInfo>
+              <Affiliation>Broad Institute, Cambridge, MA, USA.</Affiliation>
+            </AffiliationInfo>
+          </Author>
+          <Author ValidYN="Y">
+            <LastName>Okafor</LastName>
+            <ForeName>Adaeze</ForeName>
+            <Initials>A</Initials>
+          </Author>
+        </AuthorList>
+        <PublicationTypeList>
+          <PublicationType UI="D016428">Journal Article</PublicationType>
+        </PublicationTypeList>
+        <ArticleDate DateType="Electronic">
+          <Year>2022</Year>
+          <Month>06</Month>
+          <Day>13</Day>
+        </ArticleDate>
+      </Article>
+      <KeywordList Owner="NOTNLM">
+        <Keyword MajorTopicYN="N">prime editing</Keyword>
+        <Keyword MajorTopicYN="N">CRISPR</Keyword>
+      </KeywordList>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">35123456</ArticleId>
+        <ArticleId IdType="doi">10.1038/s41587-022-01234-5</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+
+  <PubmedArticle>
+    <MedlineCitation Status="MEDLINE" Owner="NLM">
+      <PMID Version="1">31987654</PMID>
+      <Article PubModel="Print">
+        <Journal>
+          <JournalIssue CitedMedium="Print">
+            <Volume>17</Volume>
+            <PubDate>
+              <MedlineDate>2019 Jan-Feb</MedlineDate>
+            </PubDate>
+          </JournalIssue>
+          <Title>Journal of Molecular Biology</Title>
+        </Journal>
+        <ArticleTitle>Base editing outcomes in <sup>13</sup>C-labelled cultures.</ArticleTitle>
+        <Abstract>
+          <AbstractText>A single unlabelled abstract paragraph describing base editing outcomes.</AbstractText>
+        </Abstract>
+        <AuthorList CompleteYN="Y">
+          <Author ValidYN="Y">
+            <CollectiveName>The Genome Editing Consortium</CollectiveName>
+          </Author>
+        </AuthorList>
+        <PublicationTypeList>
+          <PublicationType UI="D016428">Journal Article</PublicationType>
+        </PublicationTypeList>
+      </Article>
+      <MeshHeadingList>
+        <MeshHeading>
+          <DescriptorName UI="D000818" MajorTopicYN="N">Gene Editing</DescriptorName>
+        </MeshHeading>
+      </MeshHeadingList>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">31987654</ArticleId>
+        <ArticleId IdType="doi">10.1016/j.jmb.2019.01.002</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+
+  <PubmedArticle>
+    <MedlineCitation Status="PubMed-not-MEDLINE" Owner="NLM">
+      <PMID Version="1">28001122</PMID>
+      <Article PubModel="Print">
+        <Journal>
+          <JournalIssue CitedMedium="Print">
+            <PubDate>
+              <Year>2016</Year>
+            </PubDate>
+          </JournalIssue>
+          <Title>Proceedings of the Annual Symposium</Title>
+        </Journal>
+        <ArticleTitle>A conference abstract with no abstract text.</ArticleTitle>
+        <AuthorList CompleteYN="N">
+          <Author ValidYN="Y">
+            <LastName>Novak</LastName>
+            <Initials>JR</Initials>
+          </Author>
+        </AuthorList>
+      </Article>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">28001122</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+</PubmedArticleSet>

@@ -1,0 +1,6 @@
+{
+  "header": { "type": "esearch", "version": "0.3" },
+  "esearchresult": {
+    "ERROR": "Empty term and query_key - nothing todo"
+  }
+}
