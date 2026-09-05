@@ -19,7 +19,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health, search
+from app.api.routes import export, health, search
 from app.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
 from app.services.enrichment.clustering import TopicClusterer
@@ -32,6 +32,7 @@ from app.services.summarization.grounding import GroundingChecker
 from app.services.summarization.provider import build_provider
 from app.services.summarization.summarizer import PaperSummarizer
 from app.sources.registry import SourceRegistry
+from app.storage.paper_store import PaperStore
 from app.storage.summary_cache import SummaryCache
 
 logger = get_logger(__name__)
@@ -55,6 +56,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     extractor = await _build_entity_extractor(settings)
     cache = _build_summary_cache(settings)
     summarizer = _build_summarizer(settings, cache)
+    paper_store = (
+        PaperStore(settings.paper_store_path) if settings.paper_store_path else None
+    )
 
     app.state.registry = registry
     app.state.embedder = embedder
@@ -63,8 +67,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.entity_extractor = extractor
     app.state.summary_cache = cache
     app.state.summarizer = summarizer
+    app.state.paper_store = paper_store
     app.state.search_service = SearchService(
-        registry, settings, ranker, extractor, clusterer, summarizer
+        registry, settings, ranker, extractor, clusterer, summarizer, paper_store
     )
     logger.info(
         "%s started | sources: %s | ranking: %s | entities: %s | clustering: %s "
@@ -82,6 +87,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await registry.aclose()
         if cache is not None:
             cache.close()
+        if paper_store is not None:
+            paper_store.close()
         logger.info("shutdown complete")
 
 
@@ -177,6 +184,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(search.router)
+    app.include_router(export.router)
     return app
 
 
