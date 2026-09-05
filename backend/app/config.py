@@ -125,6 +125,13 @@ class Settings(BaseSettings):
             "live first-attempt acceptance from 50% to 80%."
         ),
     )
+    paper_store_path: str = Field(
+        default="data/paperpilot.db",
+        description=(
+            "SQLite file holding retrieved papers so they can be exported "
+            "later. Empty disables storage, and with it citation export."
+        ),
+    )
     summary_cache_path: str = Field(
         default="data/paperpilot.db",
         description="SQLite file for cached summaries. Empty disables caching.",

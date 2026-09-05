@@ -55,6 +55,7 @@ from app.services.ranking.hybrid import HybridRanker
 from app.services.summarization.summarizer import PaperSummarizer
 from app.sources.base import PaperSource, SupportsArxivLookup, SupportsPmidLookup
 from app.sources.registry import SourceRegistry
+from app.storage.paper_store import PaperStore
 
 logger = get_logger(__name__)
 
@@ -70,6 +71,7 @@ class SearchService:
         entity_extractor: EntityExtractor | None = None,
         clusterer: TopicClusterer | None = None,
         summarizer: PaperSummarizer | None = None,
+        paper_store: PaperStore | None = None,
     ) -> None:
         self._registry = registry
         self._settings = settings
@@ -77,6 +79,7 @@ class SearchService:
         self._entity_extractor = entity_extractor
         self._clusterer = clusterer
         self._summarizer = summarizer
+        self._paper_store = paper_store
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         started = time.perf_counter()
@@ -111,6 +114,7 @@ class SearchService:
             self._summarize(papers),
         )
         papers = _apply_enrichment(papers, entity_lists, summaries, clusters)
+        await self._remember(papers)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
         return SearchResponse(
@@ -126,6 +130,21 @@ class SearchService:
             entities=entities,
             summaries=summary_report,
         )
+
+    async def _remember(self, papers: list[Paper]) -> None:
+        """Persist the fully enriched papers so they can be exported later.
+
+        Deliberately after enrichment: an exported citation should carry
+        the merged record the user actually saw, not the raw retrieval
+        output. A storage failure is logged and swallowed - losing the
+        ability to export later must not cost the user their results now.
+        """
+        if self._paper_store is None or not papers:
+            return
+        try:
+            await asyncio.to_thread(self._paper_store.save_many, papers)
+        except Exception:
+            logger.exception("could not persist papers for export")
 
     async def _extract_entities(
         self, papers: list[Paper]
