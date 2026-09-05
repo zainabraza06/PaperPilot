@@ -13,6 +13,7 @@ Usage::
     python -m scripts.demo_search "diffusion models" --strategy semantic
     python -m scripts.demo_search "diffusion models" --no-rank   # A/B the ranker
     python -m scripts.demo_search "diffusion models" --no-enrich # skip NER/clusters
+    python -m scripts.demo_search "diffusion models" --no-summary
 """
 
 from __future__ import annotations
@@ -32,7 +33,11 @@ from app.services.ranking.cache import CachedEmbedder
 from app.services.ranking.embeddings import build_embedder
 from app.services.ranking.hybrid import FusionStrategy, HybridRanker
 from app.services.search_service import SearchService
+from app.services.summarization.grounding import GroundingChecker
+from app.services.summarization.provider import build_provider
+from app.services.summarization.summarizer import PaperSummarizer
 from app.sources.registry import SourceRegistry
+from app.storage.summary_cache import SummaryCache
 
 # Status glyphs, chosen so the output stays readable in a plain terminal.
 _STATUS_MARK = {
@@ -72,6 +77,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--no-rank", action="store_true", help="Skip ranking entirely")
     parser.add_argument("--no-enrich", action="store_true", help="Skip NER and clustering")
     parser.add_argument("--entities", type=int, default=4, help="Entities to show per paper")
+    parser.add_argument("--no-summary", action="store_true", help="Skip summarization")
+    parser.add_argument("--no-cache", action="store_true", help="Ignore the summary cache")
     return parser.parse_args(argv)
 
 
@@ -98,7 +105,22 @@ async def run(args: argparse.Namespace) -> SearchResponse:
             min_papers=settings.min_papers_to_cluster,
         )
     )
-    service = SearchService(registry, settings, ranker, extractor, clusterer)
+    summarizer = None
+    if not args.no_summary:
+        cache = None if args.no_cache else SummaryCache(settings.summary_cache_path)
+        summarizer = PaperSummarizer(
+            build_provider(
+                settings.llm_provider, settings.mistral_api_key, settings.summary_model
+            ),
+            checker=GroundingChecker(min_overlap=settings.grounding_min_overlap),
+            cache=cache,
+            max_concurrent=settings.summary_max_concurrent,
+            max_attempts=settings.summary_max_attempts,
+        )
+
+    service = SearchService(
+        registry, settings, ranker, extractor, clusterer, summarizer
+    )
     try:
         return await service.search(
             SearchRequest(
@@ -155,6 +177,27 @@ def print_response(response: SearchResponse, show: int, entity_limit: int = 4) -
     else:
         print(f"ENTITIES   none ({entities.reason})")
 
+    summaries = response.summaries
+    if summaries.applied:
+        line = (
+            f"SUMMARIES  {summaries.summarized} via {summaries.model} "
+            f"in {summaries.elapsed_ms} ms"
+        )
+        details = []
+        if summaries.from_cache:
+            details.append(f"{summaries.from_cache} cached")
+        if summaries.regenerated:
+            details.append(f"{summaries.regenerated} regenerated after failing grounding")
+        if summaries.fell_back:
+            details.append(f"{summaries.fell_back} fell back to extractive")
+        if details:
+            line += "  (" + ", ".join(details) + ")"
+        print(line)
+        if summaries.reason:
+            print(f"           {summaries.reason}")
+    else:
+        print(f"SUMMARIES  none ({summaries.reason})")
+
     clustering = response.clustering
     if clustering.applied:
         print(f"CLUSTERS   {clustering.clusters} sub-topics "
@@ -190,7 +233,17 @@ def print_paper(index: int, paper: Paper, entity_limit: int = 4) -> None:
     print(f"    {badges}  |  {year}  |  {paper.journal or 'no venue'}")
     print(f"    {_format_authors(paper)}")
     print(f"    DOI: {paper.doi or '—'}")
-    if paper.abstract:
+    if paper.summary:
+        mark = {
+            "generated": "AI",
+            "regenerated": "AI*",
+            "extractive": "EXT",
+        }[paper.summary.origin.value]
+        status = paper.summary.grounding.status.value
+        print(f"    [{mark}|{status}] {textwrap.shorten(paper.summary.text, width=66, placeholder=' …')}")
+        for issue in paper.summary.grounding.issues[:2]:
+            print(f"        ! {issue.detail}")
+    elif paper.abstract:
         print(f"    {textwrap.shorten(paper.abstract, width=72, placeholder=' …')}")
     else:
         print("    (no abstract deposited)")
