@@ -14,10 +14,18 @@ The `retrieval-order` row is the baseline that matters: it is the order
 the fan-out already produces with no ranking at all. A ranker that cannot
 beat it is not earning its dependencies.
 
+With ``--clusters`` it also reports what the topic clusterer does to each
+frozen pool. That has no ground truth to score against - nobody hand-labelled
+the "correct" sub-topics - so it reports the silhouette score, the group
+sizes and the generated labels, and leaves the judgement of whether those
+labels are useful to a reader. Reporting an unvalidated number as if it
+were an accuracy would be worse than reporting nothing.
+
 Usage::
 
     python -m scripts.evaluate_ranking
     python -m scripts.evaluate_ranking --sweep-alpha
+    python -m scripts.evaluate_ranking --clusters
     python -m scripts.evaluate_ranking --markdown > ../docs/ranking-results.md
 """
 
@@ -39,6 +47,8 @@ from app.services.ranking.evaluation import (
     average_metrics,
     evaluate_ranking,
 )
+from app.services.enrichment.clustering import TopicClusterer
+from app.services.ranking.cache import CachedEmbedder
 from app.services.ranking.hybrid import FusionStrategy, HybridRanker
 
 EVAL_DIR = Path(__file__).resolve().parent.parent / "eval"
@@ -146,6 +156,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--sweep-alpha", action="store_true", help="Also evaluate other alphas")
     parser.add_argument("--markdown", action="store_true", help="Emit a markdown table")
     parser.add_argument("--per-query", action="store_true", help="Break the winner down by query")
+    parser.add_argument("--clusters", action="store_true", help="Also report topic clustering")
     return parser.parse_args(argv)
 
 
@@ -157,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
 
     settings = get_settings()
     pool, judgments, queries = load_pool(), load_judgments(), load_queries()
-    embedder = build_embedder(settings.embedding_model)
+    embedder = CachedEmbedder(build_embedder(settings.embedding_model))
 
     judged = sum(len(v) for v in judgments.values())
     relevant = sum(1 for v in judgments.values() for g in v.values() if g >= 2)
@@ -195,7 +206,39 @@ def main(argv: list[str] | None = None) -> int:
                 f" ({metrics.recall_attainment(10):>5.1%} of ceiling) "
                 f"NDCG@10={metrics.ndcg_at_k[10]:.3f} MRR={metrics.mrr:.3f}"
             )
+
+    if args.clusters:
+        report_clustering(pool, settings.max_clusters, embedder)
     return 0
+
+
+def report_clustering(
+    pool: dict[str, list[Paper]], max_clusters: int, embedder: Embedder
+) -> None:
+    """Describe what the clusterer does to each pool.
+
+    Deliberately descriptive, not scored: there is no hand-labelled ground
+    truth for sub-topics, so this prints what a reviewer needs to judge the
+    output themselves - how many groups, how well separated, how big, and
+    what they were named.
+    """
+    clusterer = TopicClusterer(embedder, max_clusters=max_clusters)
+    clustered = 0
+    print("\nclustering (ward-agglomerative, silhouette-selected k):")
+    for query_id, papers in pool.items():
+        result = clusterer.cluster(papers)
+        if not result.report.applied:
+            print(f"  {query_id:<24} n={len(papers):<3} not split - {result.report.reason}")
+            continue
+        clustered += 1
+        sizes = "/".join(str(cluster.size) for cluster in result.clusters)
+        print(
+            f"  {query_id:<24} n={len(papers):<3} k={result.report.clusters} "
+            f"sizes={sizes:<10} silhouette={result.report.silhouette}"
+        )
+        for cluster in result.clusters:
+            print(f"      [{cluster.size:>2}] {cluster.label}")
+    print(f"\n  {clustered}/{len(pool)} pools split into sub-topics")
 
 
 if __name__ == "__main__":

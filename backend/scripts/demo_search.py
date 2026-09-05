@@ -12,6 +12,7 @@ Usage::
     python -m scripts.demo_search "CRISPR" --sources arxiv crossref
     python -m scripts.demo_search "diffusion models" --strategy semantic
     python -m scripts.demo_search "diffusion models" --no-rank   # A/B the ranker
+    python -m scripts.demo_search "diffusion models" --no-enrich # skip NER/clusters
 """
 
 from __future__ import annotations
@@ -25,6 +26,9 @@ from app.config import get_settings
 from app.core.logging import configure_logging
 from app.models.paper import Paper, SourceName
 from app.models.search import SearchRequest, SearchResponse, SourceStatus
+from app.services.enrichment.clustering import TopicClusterer
+from app.services.enrichment.entities import build_entity_extractor
+from app.services.ranking.cache import CachedEmbedder
 from app.services.ranking.embeddings import build_embedder
 from app.services.ranking.hybrid import FusionStrategy, HybridRanker
 from app.services.search_service import SearchService
@@ -66,6 +70,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Fusion strategy (default: from settings)",
     )
     parser.add_argument("--no-rank", action="store_true", help="Skip ranking entirely")
+    parser.add_argument("--no-enrich", action="store_true", help="Skip NER and clustering")
+    parser.add_argument("--entities", type=int, default=4, help="Entities to show per paper")
     return parser.parse_args(argv)
 
 
@@ -73,15 +79,26 @@ async def run(args: argparse.Namespace) -> SearchResponse:
     settings = get_settings()
     registry = SourceRegistry(settings)
 
+    # One embedder, shared: the ranker and the clusterer see the same papers,
+    # so the second one to run reads its vectors out of the cache.
+    embedder = CachedEmbedder(build_embedder(settings.embedding_model))
+
     ranker = None
     if not args.no_rank:
         strategy = FusionStrategy(args.strategy or settings.ranking_strategy)
-        ranker = HybridRanker(
-            build_embedder(settings.embedding_model),
-            strategy=strategy,
-            alpha=settings.ranking_alpha,
+        ranker = HybridRanker(embedder, strategy=strategy, alpha=settings.ranking_alpha)
+
+    extractor = None if args.no_enrich else build_entity_extractor(settings.ner_model)
+    clusterer = (
+        None
+        if args.no_enrich
+        else TopicClusterer(
+            embedder,
+            max_clusters=settings.max_clusters,
+            min_papers=settings.min_papers_to_cluster,
         )
-    service = SearchService(registry, settings, ranker)
+    )
+    service = SearchService(registry, settings, ranker, extractor, clusterer)
     try:
         return await service.search(
             SearchRequest(
@@ -94,7 +111,7 @@ async def run(args: argparse.Namespace) -> SearchResponse:
         await registry.aclose()
 
 
-def print_response(response: SearchResponse, show: int) -> None:
+def print_response(response: SearchResponse, show: int, entity_limit: int = 4) -> None:
     print()
     print("=" * 78)
     print(f"QUERY      {response.query.raw[:200]}")
@@ -131,16 +148,32 @@ def print_response(response: SearchResponse, show: int) -> None:
     else:
         print(f"UNRANKED   retrieval order ({ranking.reason})")
 
+    entities = response.entities
+    if entities.applied:
+        print(f"ENTITIES   {entities.entities_found} found via {entities.model} "
+              f"in {entities.elapsed_ms} ms")
+    else:
+        print(f"ENTITIES   none ({entities.reason})")
+
+    clustering = response.clustering
+    if clustering.applied:
+        print(f"CLUSTERS   {clustering.clusters} sub-topics "
+              f"(silhouette {clustering.silhouette}, {clustering.elapsed_ms} ms)")
+        for cluster in response.clusters:
+            print(f"             [{cluster.size:>2}] {cluster.label}")
+    else:
+        print(f"CLUSTERS   none ({clustering.reason})")
+
     if not response.papers:
         print("\nNo papers found.")
         return
 
     print("\n" + "-" * 78)
     for index, paper in enumerate(response.papers[:show], start=1):
-        print_paper(index, paper)
+        print_paper(index, paper, entity_limit)
 
 
-def print_paper(index: int, paper: Paper) -> None:
+def print_paper(index: int, paper: Paper, entity_limit: int = 4) -> None:
     badges = "+".join(_SOURCE_BADGE[s] for s in paper.all_sources)
     year = paper.published_date.isoformat() if paper.published_date else "no date"
 
@@ -161,6 +194,11 @@ def print_paper(index: int, paper: Paper) -> None:
         print(f"    {textwrap.shorten(paper.abstract, width=72, placeholder=' …')}")
     else:
         print("    (no abstract deposited)")
+    if paper.entities:
+        shown = ", ".join(
+            f"{entity.text} ({entity.label.value})" for entity in paper.entities[:entity_limit]
+        )
+        print(f"    entities: {shown}")
 
 
 def _format_authors(paper: Paper, limit: int = 3) -> str:
@@ -180,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     configure_logging("INFO" if args.verbose else "WARNING")
     response = asyncio.run(run(args))
-    print_response(response, args.show)
+    print_response(response, args.show, args.entities)
     # A search that reached no source at all is a failure worth an exit code.
     return 0 if any(not r.status.is_failure for r in response.sources) else 1
 
