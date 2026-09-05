@@ -3,10 +3,10 @@
 AI-powered scientific literature search across **PubMed**, **arXiv** and **Crossref** —
 one query, one ranked list, AI summaries, one-click citation export.
 
-> **Status: Stages 1–3 complete — multi-source retrieval, hybrid ranking with
-> measured Recall@k / NDCG@k on a hand-judged golden set, and NER + topic
-> clustering.** Summarization (Stage 4), citation export (Stage 5), the React
-> frontend (Stage 6) and packaging (Stage 7) are in progress.
+> **Status: Stages 1–4 complete — multi-source retrieval, hybrid ranking with
+> measured Recall@k / NDCG@k, NER + topic clustering, and grounded AI
+> summarization with a measured fact-checking layer.** Citation export
+> (Stage 5), the React frontend (Stage 6) and packaging (Stage 7) are in progress.
 
 ---
 
@@ -41,6 +41,9 @@ python -m scripts.demo_search "prime editing in primary human cells"
 
 # Compare ranking strategies on the golden set, and report clustering
 python -m scripts.evaluate_ranking --per-query --sweep-alpha --clusters
+
+# Measure the grounding check against 894 labelled cases
+python -m scripts.evaluate_grounding
 
 # Or run the API
 uvicorn app.main:app --reload
@@ -332,6 +335,132 @@ paper appearing in two refinements of a query is embedded once.
 
 ---
 
+## Stage 4 — grounded summarization
+
+Every paper gets a 2-3 sentence summary. The interesting part is not generating it.
+
+### The policy
+
+```
+cache hit?  ──yes──▶ return it
+    │no
+    ▼
+generate ──▶ grounding check ──pass──▶ return, cache it
+                    │fail
+                    ▼
+         regenerate, quoting the specific failures back
+                    │
+              ┌─────┴─────┐
+            pass         fail
+              │            │
+              ▼            ▼
+          return    extractive fallback, labelled
+```
+
+A summary that cannot be grounded is **replaced, not shown with a warning**. A
+research tool should not offer "here is a claim we know the abstract does not
+support" as an option. The fallback is sentences lifted verbatim from the abstract:
+worse writing, but it cannot hallucinate, because it *is* the abstract.
+
+The retry is a correction, not a re-roll. It quotes the rejected text and the exact
+reasons back to the model — re-running the same prompt at a higher temperature would
+just be sampling for luck.
+
+### The grounding check is deliberately not an LLM
+
+Asking a model to grade its own output is circular, doubles cost and latency, and
+produces a verdict that cannot be unit-tested. These six checks are deterministic,
+run in microseconds, and each is a property that can be asserted:
+
+| check | catches |
+|---|---|
+| **Fabricated numbers** | every figure in the summary must occur in the abstract |
+| **Fabricated entities** | gene symbols, acronyms, named methods the abstract never mentions |
+| **Vocabulary overlap** | a summary written about a different paper |
+| **Direction of effect** | "increased" silently becoming "decreased" |
+| **Overclaiming** | "the first", "proves", "cures" — when the abstract doesn't say so |
+| **Format** | the 2-3 sentences that were actually requested |
+
+### Measured, including where it fails
+
+`python -m scripts.evaluate_grounding` — 148 real abstracts from the frozen pool,
+894 labelled cases, fully offline and deterministic.
+
+```
+should be ACCEPTED
+  faithful                  148/148   100.0%
+  paraphrase                146/148    98.6%
+
+should be REJECTED (one rule each)
+  fabricated number          47/47    100.0%
+  fabricated entity         148/148   100.0%
+  reversed direction         22/22    100.0%
+  overclaim                  85/85    100.0%
+  wrong paper               148/148   100.0%
+
+known blind spot
+  recombination               0/148     0.0%   ← 100% slip through
+```
+
+**Read the last row, not the first five.** Each corruption in the middle block is a
+clean instance of exactly the failure mode one rule was written to catch, so 100%
+there confirms the rules fire — it is not evidence that real hallucinations get
+caught. The two rows that carry information:
+
+- **False-positive rate: 0.7%** (2 of 296), measured on paraphrases reworded away from
+  the abstract's exact sentences. That is the real cost of the check — a checker that
+  rejects good summaries isn't "safe", it just degrades everything to extractive text.
+- **The blind spot is 100%.** A "recombination" case asserts a causal link the abstract
+  never makes, built entirely from the abstract's own vocabulary — no invented number,
+  no invented entity, no reversed direction. Every single one passes. The check is
+  **lexical, not inferential**, and catching these needs entailment, which is a model,
+  which brings back every problem above. This is measured and stated rather than left
+  for someone to discover.
+
+There is a test (`test_the_check_is_documented_as_lexical_not_inferential`) that pins
+this limitation, so a future change claiming to fix it has to update the test.
+
+### Caching, and the cache key
+
+Summaries are the only expensive, non-deterministic and *chargeable* thing the
+pipeline produces, so they persist in SQLite. The key is not the paper id but
+`(paper_id, model, prompt_version, source_fingerprint)`:
+
+- **model** — different model, different answer.
+- **prompt_version** — after the prompt is tightened, text produced under the old
+  instructions must not be served. Otherwise the cache silently undoes the fix.
+- **source_fingerprint** — a digest of the exact title and abstract summarized.
+  Deduplication merges field-wise, so a paper with no abstract on one search can have
+  one on the next; the old summary described different input.
+
+One subtlety worth naming: when generation fails and falls back, the text is filed
+under the *configured model*, not under `"extractive"`. Keying it off the produced
+text would guarantee a miss on every future lookup and recompute the fallback forever.
+It still *reports* as extractive so the UI never mislabels it as AI-generated.
+
+### It runs without an API key
+
+`build_provider` returns `None` when no key is set, and every summary becomes
+extractive, clearly labelled `SummaryOrigin.EXTRACTIVE`. A portfolio project that
+can't be cloned and run without paid credentials is a worse project. Set
+`PAPERPILOT_MISTRAL_API_KEY` to switch generation on; nothing else changes.
+
+Provider errors, rate limits and timeouts all degrade the same way: a provider outage
+costs the user their summaries, not their search results.
+
+### Known limitations
+
+- **Lexical, not inferential** — quantified above. This is the big one.
+- **The corruption set is synthetic.** Real models do not hallucinate by uniformly
+  resampling digits; recall on designed cases is an upper bound.
+- **Single provider implemented.** The `LLMProvider` protocol is one method, so
+  adding OpenAI or a local model is a ~40-line adapter, but only Mistral is written.
+- **No live generation numbers yet** — no API key was configured while building this
+  stage, so the measured results above cover the checker and the fallback path, not
+  end-to-end generation quality.
+
+---
+
 ## Architecture
 
 ```
@@ -364,13 +493,14 @@ paper appearing in two refinements of a query is embedded once.
                                      ▼
               ┌──────────────────────┴──────────────────────┐
               ▼                                             ▼
-      ┌───────────────────┐                     ┌───────────────────────┐
-      │  EntityExtractor  │  model NER +        │    TopicClusterer     │
-      │   (spaCy + rules) │  shape patterns     │ (ward + c-TF-IDF)     │
-      └─────────┬─────────┘                     └───────────┬───────────┘
-                └──────────────────┬────────────────────────┘
-                                   ▼
-              ranked Paper[] + scores + entities + clusters
+      ┌───────────────────┐  ┌──────────────────┐  ┌───────────────────────┐
+      │  EntityExtractor  │  │ PaperSummarizer  │  │    TopicClusterer     │
+      │  (spaCy + rules)  │  │ generate → check │  │  (ward + c-TF-IDF)    │
+      │                   │  │ → correct → fall │  │                       │
+      └─────────┬─────────┘  └────────┬─────────┘  └───────────┬───────────┘
+                └─────────────────────┼────────────────────────┘
+                                      ▼
+        ranked Paper[] + scores + entities + clusters + grounded summaries
 ```
 
 The embedder is shared between the ranker and the clusterer behind an LRU cache, so
@@ -400,7 +530,9 @@ backend/app/
 ├── models/         # Paper, Author, and the search request/response contract
 ├── services/       # query parsing, deduplication, search orchestration
 │   ├── enrichment/ # NER (spaCy + shape patterns) and topic clustering
-│   └── ranking/    # document view, embeddings, cache, BM25, fusion, IR metrics
+│   ├── ranking/    # document view, embeddings, cache, BM25, fusion, IR metrics
+│   └── summarization/  # providers, prompts, grounding check, extractive fallback
+├── storage/        # SQLite summary cache
 └── sources/        # PaperSource interface + one module per provider
 
 backend/eval/       # golden set: queries, frozen candidate pool, judgments
@@ -462,7 +594,7 @@ Stage 2's ranking needs.
 
 ```bash
 cd backend
-python -m pytest          # 250 tests
+python -m pytest          # 304 tests
 python -m ruff check app tests
 ```
 
@@ -492,6 +624,8 @@ Coverage is concentrated where interviews probe:
 | Entity patterns, label normalization, trust guards | `tests/test_entities.py` |
 | Cluster selection, labelling, and refusal to split | `tests/test_clustering.py` |
 | Embedding cache correctness and eviction | `tests/test_embedding_cache.py` |
+| Every grounding rule, and the limitation it cannot cover | `tests/test_grounding.py` |
+| Retry-on-failure, fallback, caching, provider errors | `tests/test_summarization.py` |
 
 ---
 
@@ -513,6 +647,7 @@ Interactive docs at `/docs` when the server is running.
 **Backend** Python 3.12 · FastAPI · Pydantic v2 · httpx (async) · defusedxml
 **Ranking** sentence-transformers (`all-MiniLM-L6-v2`) · rank-bm25 · NumPy
 **Enrichment** spaCy (SciSpacy-ready) · scikit-learn (Ward agglomerative)
+**Summarization** Mistral API via httpx · deterministic grounding check · SQLite cache
 **Testing** pytest · pytest-asyncio · respx · ruff · mypy (strict)
-**Coming** grounded LLM summarization (Stage 4) · citation export (Stage 5) ·
-React + TypeScript + Tailwind (Stage 6) · Docker Compose (Stage 7)
+**Coming** citation export (Stage 5) · React + TypeScript + Tailwind (Stage 6) ·
+Docker Compose (Stage 7)
