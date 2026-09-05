@@ -14,6 +14,7 @@ Usage::
     python -m scripts.demo_search "diffusion models" --no-rank   # A/B the ranker
     python -m scripts.demo_search "diffusion models" --no-enrich # skip NER/clusters
     python -m scripts.demo_search "diffusion models" --no-summary
+    python -m scripts.demo_search "prime editing" --export bibtex --show 3
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from app.models.paper import Paper, SourceName
 from app.models.search import SearchRequest, SearchResponse, SourceStatus
 from app.services.enrichment.clustering import TopicClusterer
 from app.services.enrichment.entities import build_entity_extractor
+from app.services.export import ExportFormat, get_formatter
 from app.services.ranking.cache import CachedEmbedder
 from app.services.ranking.embeddings import build_embedder
 from app.services.ranking.hybrid import FusionStrategy, HybridRanker
@@ -79,6 +81,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--entities", type=int, default=4, help="Entities to show per paper")
     parser.add_argument("--no-summary", action="store_true", help="Skip summarization")
     parser.add_argument("--no-cache", action="store_true", help="Ignore the summary cache")
+    parser.add_argument(
+        "--export",
+        choices=[f.value for f in ExportFormat],
+        help="Also print citations for the shown papers in this format",
+    )
     return parser.parse_args(argv)
 
 
@@ -254,6 +261,21 @@ def print_paper(index: int, paper: Paper, entity_limit: int = 4) -> None:
         print(f"    entities: {shown}")
 
 
+def print_citations(response: SearchResponse, show: int, export_format: ExportFormat) -> None:
+    """Print the shown papers as a citation file.
+
+    Exactly what the export endpoint would return, so the formats can be
+    eyeballed - and pasted into a reference manager - without running the
+    API.
+    """
+    formatter = get_formatter(export_format)
+    print("\n" + "=" * 78)
+    print(f"CITATIONS  {export_format.value}  (.{formatter.extension})")
+    print("=" * 78)
+    # RIS uses CRLF; a terminal shows the stray carriage returns otherwise.
+    print(formatter.format_many(response.papers[:show]).replace("\r\n", "\n"))
+
+
 def _format_authors(paper: Paper, limit: int = 3) -> str:
     if not paper.authors:
         return "no authors listed"
@@ -272,6 +294,8 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging("INFO" if args.verbose else "WARNING")
     response = asyncio.run(run(args))
     print_response(response, args.show, args.entities)
+    if args.export:
+        print_citations(response, args.show, ExportFormat(args.export))
     # A search that reached no source at all is a failure worth an exit code.
     return 0 if any(not r.status.is_failure for r in response.sources) else 1
 

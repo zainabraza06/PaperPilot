@@ -3,10 +3,10 @@
 AI-powered scientific literature search across **PubMed**, **arXiv** and **Crossref** —
 one query, one ranked list, AI summaries, one-click citation export.
 
-> **Status: Stages 1–4 complete — multi-source retrieval, hybrid ranking with
-> measured Recall@k / NDCG@k, NER + topic clustering, and grounded AI
-> summarization with a measured fact-checking layer.** Citation export
-> (Stage 5), the React frontend (Stage 6) and packaging (Stage 7) are in progress.
+> **Status: Stages 1–5 complete — multi-source retrieval, hybrid ranking with
+> measured Recall@k / NDCG@k, NER + topic clustering, grounded AI summarization
+> with a measured fact-checking layer, and spec-correct citation export.**
+> The React frontend (Stage 6) and packaging (Stage 7) are in progress.
 
 ---
 
@@ -533,6 +533,100 @@ costs the user their summaries, not their search results.
 
 ---
 
+## Stage 5 — citation export
+
+BibTeX, RIS, and plain text in APA 7th or Vancouver, for one paper or a bulk
+selection. The brief asked for each format's *actual* spec rather than an
+approximation, so the tests do not check strings we wrote — they feed our output to
+**independent parsers** (`bibtexparser`, `rispy`) and assert that another
+implementation reads back what we meant. Anything only we can parse is not really
+BibTeX.
+
+That decision paid for itself immediately: it found two real bugs before the code
+was ever committed.
+
+### The two bugs round-tripping caught
+
+**Escaping corrupted its own output.** `escape()` replaced LaTeX control characters
+in sequence, so `\` became `\textbackslash{}` — and the *later* brace rules then
+escaped those braces into `\textbackslash\{\}`. Every backslash in a title came out
+mangled. Chained `str.replace` can never be right here; the fix is a single regex
+pass that touches each source character exactly once and never re-scans a
+replacement.
+
+**Author names were escaped twice.** `_authors()` escapes each name and then adds
+*structural* braces around unsplittable ones — `{The Genome Editing Consortium}`,
+which is how BibTeX is told "this is one name, not `Consortium, The Genome Editing`".
+The generic field path then escaped that again into `\{The Genome…\}`, so BibTeX
+stopped seeing a grouped name and started seeing punctuation. Ampersands in author
+names were mangled the same way.
+
+Neither is visible by reading the output. Both are obvious the moment a real parser
+reads it.
+
+### What "actually correct" means per format
+
+**BibTeX**
+
+| concern | handling |
+|---|---|
+| `& % $ # _ { } ~ ^ \` | escaped in one pass — an unescaped `&` breaks the *user's* build |
+| Title lowercasing | `{CRISPR-Cas9}` brace-protected, or styles typeset it "Crispr-cas9" |
+| Punctuation in protection | `{DNA}.` not `{DNA.}` — braces protect capitals, not full stops |
+| Key collisions | `chen_prime_2022`, then `…2022a` — same group, same year is the normal case |
+| Non-ASCII keys | `Zöller` → `zoller`, folded |
+| Entry types | a preprint is `@misc`, a chapter `@incollection` — derived, not defaulted |
+| Page ranges | `1021--1030`, BibTeX's double dash |
+| `month` | an unquoted macro (`month = jul`), which is style-aware, not a literal |
+
+**RIS**
+
+| concern | handling |
+|---|---|
+| Tag grammar | exactly `TY  - JOUR` — one space instead of two and EndNote drops the field |
+| Record bounds | `TY` first, `ER  - ` last |
+| Line endings | CRLF, as the spec requires |
+| Repeatable tags | one `AU  - ` line per author, not a joined string |
+| Page ranges | split into `SP`/`EP`, including en-dashed ranges publishers really deposit |
+| Newlines in values | collapsed, or they would be read as new tag lines |
+
+**Plain text.** APA 7th and Vancouver, because the audience is split — APA is the
+science default, Vancouver is what biomedical journals want, and this searches
+PubMed. Both have exact author rules that are the usual source of wrong output: APA
+lists up to 20 authors and for 21+ gives the first 19, an ellipsis, then the **final**
+author (not the twentieth — the common bug); Vancouver lists 6 then `et al`, with no
+periods between surname and initials.
+
+### Papers are stored server-side, not posted back
+
+Export needs the full record, and a search response is not something the server keeps.
+The alternative — having the client POST the papers back — means trusting a caller's
+copy of a record to generate a citation, so anyone could get a plausible-looking
+citation for a paper that does not exist. Instead every search upserts its **enriched**
+papers into SQLite (`PaperStore`), and export takes ids.
+
+Papers are stored as their serialized model rather than shredded into columns. The
+`Paper` model *is* the schema, it changes as stages are added, and nothing here queries
+by field — search is the query engine, this is a keyed store.
+
+A selection where some ids have aged out still exports the rest and reports the gap in
+an `X-PaperPilot-Missing` header, rather than failing the whole request.
+
+### Endpoints
+
+| method | path | purpose |
+|---|---|---|
+| `POST` | `/api/export` | bulk export of a selection, capped at 500 ids |
+| `GET` | `/api/export/{paper_id}?format=ris` | single paper — a GET so the UI can use a plain link |
+| `GET` | `/api/export/formats/available` | so the format picker isn't hardcoded in the frontend |
+
+Both return a download with `Content-Disposition`, and caller-supplied filenames are
+stripped of quotes and path separators before they reach that header.
+
+Try it without the API: `python -m scripts.demo_search "prime editing" --export ris`
+
+---
+
 ## Architecture
 
 ```
@@ -573,6 +667,14 @@ costs the user their summaries, not their search results.
                 └─────────────────────┼────────────────────────┘
                                       ▼
         ranked Paper[] + scores + entities + clusters + grounded summaries
+                                      │
+                                      ▼
+                        ┌──────────────────────────┐
+                        │        PaperStore        │  SQLite, so a selection
+                        │   (id → enriched Paper)  │  can be cited later
+                        └────────────┬─────────────┘
+                                     ▼
+                       BibTeX · RIS · APA · Vancouver
 ```
 
 The embedder is shared between the ranker and the clusterer behind an LRU cache, so
@@ -602,9 +704,10 @@ backend/app/
 ├── models/         # Paper, Author, and the search request/response contract
 ├── services/       # query parsing, deduplication, search orchestration
 │   ├── enrichment/ # NER (spaCy + shape patterns) and topic clustering
+│   ├── export/     # BibTeX, RIS, APA and Vancouver formatters
 │   ├── ranking/    # document view, embeddings, cache, BM25, fusion, IR metrics
 │   └── summarization/  # providers, prompts, grounding check, extractive fallback
-├── storage/        # SQLite summary cache
+├── storage/        # SQLite summary cache and paper store
 └── sources/        # PaperSource interface + one module per provider
 
 backend/eval/       # golden set: queries, frozen candidate pool, judgments
@@ -666,7 +769,7 @@ Stage 2's ranking needs.
 
 ```bash
 cd backend
-python -m pytest          # 316 tests
+python -m pytest          # 396 tests
 python -m ruff check app tests
 ```
 
@@ -698,6 +801,8 @@ Coverage is concentrated where interviews probe:
 | Embedding cache correctness and eviction | `tests/test_embedding_cache.py` |
 | Every grounding rule, and the limitation it cannot cover | `tests/test_grounding.py` |
 | Retry-on-failure, fallback, caching, provider errors | `tests/test_summarization.py` |
+| BibTeX and RIS round-tripped through independent parsers | `tests/test_export.py` |
+| Export endpoints, the paper store, filename sanitizing | `tests/test_export_api.py` |
 
 ---
 
@@ -707,6 +812,8 @@ Coverage is concentrated where interviews probe:
 |---|---|---|
 | `GET` | `/health` | Liveness plus the registered sources (the frontend builds its filters from this) |
 | `GET` | `/api/search?q=…` | Search all sources, ranked, with per-source and ranking status |
+| `POST` | `/api/export` | Export a selection as BibTeX, RIS, APA or Vancouver |
+| `GET` | `/api/export/{id}` | Export one paper |
 | `POST` | `/api/search` | Same, for abstract snippets too long for a query string |
 | `GET` | `/api/parse?q=…` | How a query would be interpreted — powers the live input-type hint in the UI |
 
@@ -720,6 +827,6 @@ Interactive docs at `/docs` when the server is running.
 **Ranking** sentence-transformers (`all-MiniLM-L6-v2`) · rank-bm25 · NumPy
 **Enrichment** spaCy (SciSpacy-ready) · scikit-learn (Ward agglomerative)
 **Summarization** Mistral API via httpx · deterministic grounding check · SQLite cache
-**Testing** pytest · pytest-asyncio · respx · ruff · mypy (strict)
-**Coming** citation export (Stage 5) · React + TypeScript + Tailwind (Stage 6) ·
-Docker Compose (Stage 7)
+**Export** BibTeX · RIS · APA 7th · Vancouver, validated against independent parsers
+**Testing** pytest · pytest-asyncio · respx · bibtexparser · rispy · ruff · mypy (strict)
+**Coming** React + TypeScript + Tailwind (Stage 6) · Docker Compose (Stage 7)
