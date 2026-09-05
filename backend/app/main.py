@@ -22,6 +22,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import health, search
 from app.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
+from app.services.enrichment.clustering import TopicClusterer
+from app.services.enrichment.entities import EntityExtractor, build_entity_extractor
+from app.services.ranking.cache import CachedEmbedder
 from app.services.ranking.embeddings import build_embedder
 from app.services.ranking.hybrid import FusionStrategy, HybridRanker
 from app.services.search_service import SearchService
@@ -34,15 +37,32 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     registry = SourceRegistry(settings)
-    ranker = await _build_ranker(settings)
+    embedder = await _build_embedder(settings)
+    ranker = _build_ranker(settings, embedder)
+    clusterer = (
+        TopicClusterer(
+            embedder,
+            max_clusters=settings.max_clusters,
+            min_papers=settings.min_papers_to_cluster,
+        )
+        if embedder is not None and settings.clustering_enabled
+        else None
+    )
+    extractor = await _build_entity_extractor(settings)
+
     app.state.registry = registry
+    app.state.embedder = embedder
     app.state.ranker = ranker
-    app.state.search_service = SearchService(registry, settings, ranker)
+    app.state.clusterer = clusterer
+    app.state.entity_extractor = extractor
+    app.state.search_service = SearchService(registry, settings, ranker, extractor, clusterer)
     logger.info(
-        "%s started with sources: %s | ranking: %s",
+        "%s started | sources: %s | ranking: %s | entities: %s | clustering: %s",
         settings.app_name,
         ", ".join(source.display_name for source in registry.all()),
         f"{ranker.strategy.value} on {ranker.model_id}" if ranker else "disabled",
+        extractor.model_id if extractor else "disabled",
+        "on" if clusterer else "disabled",
     )
     try:
         yield
@@ -51,21 +71,42 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("shutdown complete")
 
 
-async def _build_ranker(settings: Settings) -> HybridRanker | None:
-    """Construct the ranker, or ``None`` if ranking is switched off.
+async def _build_embedder(settings: Settings) -> CachedEmbedder | None:
+    """Load the embedding model once, wrapped in a shared cache.
 
-    Model loading is synchronous and slow, so it runs in a thread. If the
-    model cannot be loaded at all, ``build_embedder`` degrades to the
-    hashing fallback rather than leaving the service unable to rank.
+    One instance is shared by the ranker and the clusterer, which both embed
+    the same papers during a single search: the second consumer gets them
+    from the cache instead of paying for another forward pass.
+
+    Loading is synchronous and slow, so it runs in a thread. If the model
+    cannot be loaded at all, ``build_embedder`` degrades to the hashing
+    fallback rather than leaving the service unable to rank.
     """
-    if not settings.ranking_enabled:
+    if not (settings.ranking_enabled or settings.clustering_enabled):
         return None
-    embedder = await asyncio.to_thread(build_embedder, settings.embedding_model)
+    return CachedEmbedder(
+        await asyncio.to_thread(build_embedder, settings.embedding_model)
+    )
+
+
+def _build_ranker(
+    settings: Settings, embedder: CachedEmbedder | None
+) -> HybridRanker | None:
+    """Construct the ranker, or ``None`` if ranking is switched off."""
+    if not settings.ranking_enabled or embedder is None:
+        return None
     return HybridRanker(
         embedder,
         strategy=FusionStrategy(settings.ranking_strategy),
         alpha=settings.ranking_alpha,
     )
+
+
+async def _build_entity_extractor(settings: Settings) -> EntityExtractor | None:
+    """Load the NER pipeline, or ``None`` if entity extraction is off."""
+    if not settings.entities_enabled:
+        return None
+    return await asyncio.to_thread(build_entity_extractor, settings.ner_model)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

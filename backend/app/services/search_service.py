@@ -8,12 +8,13 @@ Responsibilities, in order:
 3. Turn any failure into a per-source status instead of an exception — a
    search that reaches two of three sources is a successful, degraded
    search, and the UI says so explicitly.
-4. Interleave, deduplicate, and hand the merged set to the ranker.
+4. Interleave, deduplicate, rank, and enrich (entities + clusters).
 
-Retrieval and ranking stay separate: the ranker is injected, knows nothing
-about HTTP, and is evaluated on its own against a golden set. A search
-still returns results if the ranker is unavailable — in retrieval order,
-flagged as unranked, rather than not at all.
+Every stage after retrieval is injected and optional, and each reports its
+own outcome. A search that retrieved papers but could not rank, or could
+not cluster, still returns those papers with a reason attached — the UI
+distinguishes "no clusters" from "clustering unavailable". Degrading one
+stage never costs the user the stages that did work.
 """
 
 from __future__ import annotations
@@ -30,8 +31,10 @@ from app.core.errors import (
     SourceUnavailableError,
 )
 from app.core.logging import get_logger
+from app.models.clusters import ClusteringReport, TopicCluster
 from app.models.paper import Paper, SourceName
 from app.models.search import (
+    EnrichmentReport,
     IdentifierKind,
     ParsedQuery,
     RankingReport,
@@ -43,6 +46,8 @@ from app.models.search import (
     SourceStatus,
 )
 from app.services.dedupe import deduplicate
+from app.services.enrichment.clustering import TopicClusterer
+from app.services.enrichment.entities import EntityExtractor
 from app.services.query_parser import parse_query
 from app.services.ranking.hybrid import HybridRanker
 from app.sources.base import PaperSource, SupportsArxivLookup, SupportsPmidLookup
@@ -59,10 +64,14 @@ class SearchService:
         registry: SourceRegistry,
         settings: Settings,
         ranker: HybridRanker | None = None,
+        entity_extractor: EntityExtractor | None = None,
+        clusterer: TopicClusterer | None = None,
     ) -> None:
         self._registry = registry
         self._settings = settings
         self._ranker = ranker
+        self._entity_extractor = entity_extractor
+        self._clusterer = clusterer
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         started = time.perf_counter()
@@ -82,6 +91,14 @@ class SearchService:
 
         merged = deduplicate(_interleave(results))
         papers, ranking = await self._rank(parsed, merged.papers)
+
+        # Entity extraction and clustering are independent of each other and
+        # both CPU-bound, so they run concurrently in worker threads.
+        (papers, entities), (clusters, clustering) = await asyncio.gather(
+            self._extract_entities(papers),
+            self._cluster(papers),
+        )
+        _assign_clusters(papers, clusters)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
         return SearchResponse(
@@ -92,7 +109,61 @@ class SearchService:
             elapsed_ms=elapsed_ms,
             duplicates_merged=merged.duplicates_merged,
             ranking=ranking,
+            clusters=clusters,
+            clustering=clustering,
+            entities=entities,
         )
+
+    async def _extract_entities(
+        self, papers: list[Paper]
+    ) -> tuple[list[Paper], EnrichmentReport]:
+        """Attach named entities to each paper, degrading to none on failure."""
+        if self._entity_extractor is None or not papers:
+            return papers, EnrichmentReport(
+                applied=False,
+                reason="entity extraction is disabled"
+                if self._entity_extractor is None
+                else "no papers to enrich",
+            )
+
+        started = time.perf_counter()
+        try:
+            per_paper = await asyncio.to_thread(self._entity_extractor.extract, papers)
+        except Exception as exc:
+            logger.exception("entity extraction failed")
+            return papers, EnrichmentReport(applied=False, reason=f"NER failed: {exc}")
+
+        enriched = []
+        total = 0
+        for paper, found in zip(papers, per_paper, strict=True):
+            copy = paper.model_copy(update={"entities": found})
+            total += len(found)
+            enriched.append(copy)
+
+        return enriched, EnrichmentReport(
+            applied=True,
+            model=self._entity_extractor.model_id,
+            entities_found=total,
+            elapsed_ms=int((time.perf_counter() - started) * 1000),
+        )
+
+    async def _cluster(
+        self, papers: list[Paper]
+    ) -> tuple[list[TopicCluster], ClusteringReport]:
+        """Group the result set into sub-topics, degrading to none on failure."""
+        if self._clusterer is None or not papers:
+            return [], ClusteringReport(
+                applied=False,
+                reason="clustering is disabled"
+                if self._clusterer is None
+                else "no papers to cluster",
+            )
+        try:
+            result = await asyncio.to_thread(self._clusterer.cluster, papers)
+        except Exception as exc:
+            logger.exception("clustering failed")
+            return [], ClusteringReport(applied=False, reason=f"clustering failed: {exc}")
+        return result.clusters, result.report
 
     async def _rank(
         self, parsed: ParsedQuery, papers: list[Paper]
@@ -217,6 +288,22 @@ class SearchService:
         if kind is IdentifierKind.PMID and isinstance(source, SupportsPmidLookup):
             return await source.fetch_by_pmid(identifier)
         return None
+
+
+def _assign_clusters(papers: list[Paper], clusters: Sequence[TopicCluster]) -> None:
+    """Stamp each paper with its cluster id.
+
+    Denormalized onto the paper as well as listed on the cluster because
+    the results list renders per-paper and should not have to search every
+    cluster's membership to find a badge.
+    """
+    if not clusters:
+        return
+    lookup = {
+        paper_id: cluster.id for cluster in clusters for paper_id in cluster.paper_ids
+    }
+    for paper in papers:
+        paper.cluster_id = lookup.get(paper.id)
 
 
 def _interleave(results: Sequence[SourceResult]) -> list[Paper]:

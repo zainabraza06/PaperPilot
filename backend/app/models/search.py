@@ -11,6 +11,7 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
+from app.models.clusters import ClusteringReport, TopicCluster
 from app.models.paper import Paper, SourceName
 
 
@@ -115,6 +116,20 @@ class SourceResult(BaseModel):
         )
 
 
+class EnrichmentReport(BaseModel):
+    """Whether entity extraction ran, and with what model.
+
+    Same contract as the ranking and clustering reports: the frontend
+    renders "entities unavailable" differently from "this paper has none".
+    """
+
+    applied: bool
+    model: str | None = None
+    entities_found: int = 0
+    elapsed_ms: int = 0
+    reason: str | None = None
+
+
 class RankingReport(BaseModel):
     """Whether relevance ranking ran, and with what.
 
@@ -151,6 +166,13 @@ class SearchResponse(BaseModel):
     elapsed_ms: int
     duplicates_merged: int = 0
     ranking: RankingReport = Field(default_factory=lambda: RankingReport(applied=False))
+    clusters: list[TopicCluster] = Field(default_factory=list)
+    clustering: ClusteringReport = Field(
+        default_factory=lambda: ClusteringReport(applied=False)
+    )
+    entities: EnrichmentReport = Field(
+        default_factory=lambda: EnrichmentReport(applied=False)
+    )
 
     @property
     def degraded(self) -> bool:

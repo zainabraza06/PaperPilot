@@ -15,6 +15,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.text import normalize_doi, normalize_title
+from app.models.entities import Entity
 
 
 class SourceName(str, Enum):
@@ -124,6 +125,16 @@ class Paper(BaseModel):
 
     # --- ranking (populated by the ranker, absent before Stage 2 runs) ---
     score: RelevanceScore | None = None
+
+    # --- enrichment (populated by Stage 3, absent until it runs) ---------
+    entities: list[Entity] = Field(
+        default_factory=list,
+        description="Named entities found in the title and abstract, with spans.",
+    )
+    cluster_id: int | None = Field(
+        default=None,
+        description="Index of the topic cluster this paper was assigned to.",
+    )
 
     # --- provenance (populated by the deduplicator) ----------------------
     also_found_in: list[SourceName] = Field(

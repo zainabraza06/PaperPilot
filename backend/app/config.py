@@ -74,6 +74,20 @@ class Settings(BaseSettings):
         default="linear",
         description="Fusion strategy: semantic | lexical | linear | rrf.",
     )
+    # --- enrichment: NER and clustering (Stage 3) --------------------------
+    entities_enabled: bool = True
+    ner_model: str | None = Field(
+        default=None,
+        description=(
+            "spaCy model id. Left empty, the best installed model is chosen: "
+            "a SciSpacy biomedical model if present, else en_core_web_sm, else "
+            "pattern-only extraction."
+        ),
+    )
+    clustering_enabled: bool = True
+    max_clusters: int = Field(default=6, ge=2, le=20)
+    min_papers_to_cluster: int = Field(default=8, ge=2)
+
     ranking_alpha: float = Field(
         default=0.6,
         ge=0.0,
