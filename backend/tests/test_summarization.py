@@ -18,6 +18,7 @@ from app.services.summarization.extractive import ExtractiveSummarizer
 from app.services.summarization.grounding import GroundingChecker
 from app.services.summarization.prompts import PROMPT_VERSION
 from app.services.summarization.provider import (
+    LLMQuotaError,
     LLMRateLimitedError,
     LLMUnavailableError,
     MistralProvider,
@@ -424,3 +425,56 @@ def test_a_configured_provider_with_a_key_is_built() -> None:
     provider = build_provider("mistral", "key", "mistral-small-latest")
     assert isinstance(provider, MistralProvider)
     assert provider.model_id == "mistral-small-latest"
+
+
+@respx.mock
+async def test_a_zero_quota_account_is_distinguished_from_throttling() -> None:
+    """A valid key on an unactivated account is not a pacing problem.
+
+    Mistral returns 429 for both, but advertises a limit of 0 req/min when
+    the account has no allocation. Retrying that is guaranteed waste, and
+    calling it "rate limited" sends someone off to tune backoff for a
+    problem that has nothing to do with request pacing.
+    """
+    route = respx.post("https://api.mistral.ai/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            429,
+            headers={"x-ratelimit-limit-req-minute": "0"},
+            json={"message": "Rate limit exceeded", "type": "rate_limited"},
+        )
+    )
+    provider = MistralProvider("valid-key", max_retries=3)
+    with pytest.raises(LLMQuotaError, match="no inference quota"):
+        await provider.complete("s", "u")
+    await provider.aclose()
+    assert route.call_count == 1  # not retried
+
+
+@respx.mock
+async def test_genuine_throttling_is_still_retried() -> None:
+    route = respx.post("https://api.mistral.ai/v1/chat/completions").mock(
+        side_effect=[
+            httpx.Response(429, headers={"x-ratelimit-limit-req-minute": "60"}),
+            httpx.Response(200, json={"choices": [{"message": {"content": "ok."}}]}),
+        ]
+    )
+    provider = MistralProvider("key", max_retries=1)
+    assert await provider.complete("s", "u") == "ok."
+    await provider.aclose()
+    assert route.call_count == 2
+
+
+@respx.mock
+async def test_a_quota_failure_still_yields_an_extractive_summary() -> None:
+    # The whole degradation chain: no quota -> no generation -> the user
+    # still gets a summary and their search results.
+    respx.post("https://api.mistral.ai/v1/chat/completions").mock(
+        return_value=httpx.Response(429, headers={"x-ratelimit-limit-req-minute": "0"})
+    )
+    provider = MistralProvider("key", max_retries=0)
+    papers, report = await PaperSummarizer(provider).summarize([make_paper()])
+    await provider.aclose()
+
+    assert papers[0].summary is not None
+    assert papers[0].summary.origin is SummaryOrigin.EXTRACTIVE
+    assert report.applied is True

@@ -29,13 +29,30 @@ logger = get_logger(__name__)
 
 _RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
 
+#: Advertised requests-per-minute allowance. A value of 0 alongside a 429
+#: means "no quota on this account", not "slow down".
+_LIMIT_HEADER = "x-ratelimit-limit-req-minute"
+
 
 class LLMError(PaperPilotError):
     """The provider could not produce a completion."""
 
 
 class LLMRateLimitedError(LLMError):
-    """The provider is throttling us."""
+    """The provider is throttling us. Retrying later may succeed."""
+
+
+class LLMQuotaError(LLMError):
+    """The account has no inference quota, so retrying can never succeed.
+
+    Distinct from throttling because the remedy is different and the retry
+    policy must be too. Mistral returns HTTP 429 for both, but advertises
+    a rate limit of ``0`` requests per minute when a key is valid and the
+    account simply has no allocation - which is what an unactivated free
+    tier looks like. Retrying that is guaranteed waste, and reporting it as
+    "rate limited" sends someone off to add backoff for a problem that has
+    nothing to do with request pacing.
+    """
 
 
 class LLMUnavailableError(LLMError):
@@ -121,11 +138,22 @@ class MistralProvider:
                     raise LLMUnavailableError(
                         f"HTTP {response.status_code} from Mistral: {response.text[:200]}"
                     )
-                last_error = (
-                    LLMRateLimitedError("Mistral is rate limiting requests")
-                    if response.status_code == 429
-                    else LLMUnavailableError(f"HTTP {response.status_code} from Mistral")
-                )
+                if response.status_code == 429:
+                    if _has_no_quota(response):
+                        # Retrying a zero allowance is guaranteed waste.
+                        raise LLMQuotaError(
+                            "Mistral accepted the API key but the account has no "
+                            "inference quota (rate limit is 0 requests/minute). "
+                            "Activate a plan at https://console.mistral.ai/ - "
+                            "retrying will not help."
+                        )
+                    last_error = LLMRateLimitedError(
+                        f"Mistral is rate limiting requests: {response.text[:160]}"
+                    )
+                else:
+                    last_error = LLMUnavailableError(
+                        f"HTTP {response.status_code} from Mistral: {response.text[:160]}"
+                    )
 
             if attempt <= self._max_retries:
                 delay = min(2.0 ** (attempt - 1), 4.0) + random.uniform(0, 0.25)
@@ -146,6 +174,17 @@ class MistralProvider:
         if not isinstance(content, str) or not content.strip():
             raise LLMUnavailableError("provider returned an empty completion")
         return content.strip()
+
+
+def _has_no_quota(response: httpx.Response) -> bool:
+    """True when the provider advertises a zero requests-per-minute allowance."""
+    raw = response.headers.get(_LIMIT_HEADER)
+    if raw is None:
+        return False
+    try:
+        return int(raw) == 0
+    except ValueError:
+        return False
 
 
 def build_provider(

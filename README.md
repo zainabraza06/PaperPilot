@@ -455,9 +455,12 @@ costs the user their summaries, not their search results.
   resampling digits; recall on designed cases is an upper bound.
 - **Single provider implemented.** The `LLMProvider` protocol is one method, so
   adding OpenAI or a local model is a ~40-line adapter, but only Mistral is written.
-- **No live generation numbers yet** — no API key was configured while building this
-  stage, so the measured results above cover the checker and the fallback path, not
-  end-to-end generation quality.
+- **No live generation numbers yet.** The measured results above cover the checker and
+  the fallback path, not end-to-end generation quality. A Mistral key was supplied but
+  the account had no inference quota allocated (`/v1/models` authenticates fine;
+  `/v1/chat/completions` returns 429 with `x-ratelimit-limit-req-minute: 0`), which the
+  provider now detects and reports as a distinct `LLMQuotaError` rather than retrying a
+  zero allowance three times and calling it throttling.
 
 ---
 

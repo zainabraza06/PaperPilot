@@ -5,6 +5,7 @@ from app.services.summarization.grounding import GroundingChecker
 from app.services.summarization.provider import (
     LLMError,
     LLMProvider,
+    LLMQuotaError,
     MistralProvider,
     build_provider,
 )
@@ -15,6 +16,7 @@ __all__ = [
     "GroundingChecker",
     "LLMError",
     "LLMProvider",
+    "LLMQuotaError",
     "MistralProvider",
     "PaperSummarizer",
     "build_provider",
