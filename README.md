@@ -45,6 +45,9 @@ python -m scripts.evaluate_ranking --per-query --sweep-alpha --clusters
 # Measure the grounding check against 894 labelled cases
 python -m scripts.evaluate_grounding
 
+# Measure live generation (needs a Mistral key)
+python -m scripts.evaluate_summaries --limit 20
+
 # Or run the API
 uvicorn app.main:app --reload
 # → http://127.0.0.1:8000/docs
@@ -420,6 +423,68 @@ caught. The two rows that carry information:
 There is a test (`test_the_check_is_documented_as_lexical_not_inferential`) that pins
 this limitation, so a future change claiming to fix it has to update the test.
 
+### Measured against live generation
+
+`python -m scripts.evaluate_summaries --limit 20` — 20 real abstracts spanning every
+domain in the pool, caching bypassed, `ministral-8b-latest`.
+
+| outcome | n | share |
+|---|---|---|
+| grounded on first attempt | 14 | **70%** |
+| rescued by the correcting retry | 6 | 30% |
+| fell back to extractive | 0 | **0%** |
+| **generated text accepted** | 20 | **100%** |
+
+0.41 s per paper. The retry rescued every single failure, which is the strongest
+evidence that quoting the specific issues back beats re-sampling: none of the six
+needed a third attempt or a fallback.
+
+What the first attempts were rejected *for* is the actionable part — a pass rate says
+a model failed, this says how:
+
+```
+overclaim                 4     "the first", "proves", where the abstract doesn't
+fabricated_entity         3     a method name the abstract never mentions
+contradicted_direction    1     an effect stated in the wrong direction
+```
+
+### Two thresholds and a model, all tuned by measurement
+
+**The overlap threshold was too strict.** It shipped at 0.55, a guess. Sweeping it
+against the labelled set showed 0.45 is the *lowest* value that still detects 100% of
+wrong-paper drift (0.40 drops to 99.3%, 0.30 to 97.3%). Re-running live generation at
+both:
+
+| threshold | first attempt | fell back | drift caught |
+|---|---|---|---|
+| 0.55 | 50% | 15% | 100% |
+| **0.45** | **80%** | **5%** | **100%** |
+
+The stricter value was rejecting genuine paraphrase — nine of ten first-attempt
+rejections were `low_overlap` — which cost a retry each and pushed 15% of papers to
+extractive text for no gain in safety whatsoever.
+
+**Model choice is not driven by the grounding numbers.** All three viable models
+(`ministral-3b/8b/14b-latest`) accepted 100% of generated text with 0% fallback, and
+first-attempt rates of 75/70/80% are inside the noise at n=20. The default is
+`ministral-8b-latest` for its rate limit — 188 req/min covers a full result set, where
+14b's 30 req/min would throttle a 24-paper search.
+
+**Mistral allocates quota per model, not per account.** Worth stating because it cost
+an hour: a valid key returned HTTP 429 with `x-ratelimit-limit-req-minute: 0` on
+`mistral-small-latest` while `/v1/models` authenticated fine. Testing all 18
+chat-capable models found 12 with real allowance (30–750 req/min) and 4 at zero. The
+provider now raises a distinct `LLMQuotaError` for a zero allowance instead of retrying
+it three times and calling it throttling.
+
+**Models emit markdown even when told not to.** The first live run produced `replaces
+**CRISPR-Cas9** with the smaller **Cas12a**`, which a web UI renders as literal
+asterisks. The prompt now forbids it *and* the provider strips it, because a prompt is
+a request rather than a guarantee — and the alternative, rendering model output as
+markdown in the frontend, is an injection surface. That prompt change bumped
+`PROMPT_VERSION` to 2, which is exactly what the versioned cache key exists for: every
+summary written under v1 was invalidated rather than served.
+
 ### Caching, and the cache key
 
 Summaries are the only expensive, non-deterministic and *chargeable* thing the
@@ -445,6 +510,10 @@ extractive, clearly labelled `SummaryOrigin.EXTRACTIVE`. A portfolio project tha
 can't be cloned and run without paid credentials is a worse project. Set
 `PAPERPILOT_MISTRAL_API_KEY` to switch generation on; nothing else changes.
 
+The demo marks the provenance of every line: `[AI|grounded]` for a first-attempt pass,
+`[AI*|grounded]` for one the retry corrected, `[EXT|unverifiable]` for a paper with no
+abstract to check against.
+
 Provider errors, rate limits and timeouts all degrade the same way: a provider outage
 costs the user their summaries, not their search results.
 
@@ -455,12 +524,12 @@ costs the user their summaries, not their search results.
   resampling digits; recall on designed cases is an upper bound.
 - **Single provider implemented.** The `LLMProvider` protocol is one method, so
   adding OpenAI or a local model is a ~40-line adapter, but only Mistral is written.
-- **No live generation numbers yet.** The measured results above cover the checker and
-  the fallback path, not end-to-end generation quality. A Mistral key was supplied but
-  the account had no inference quota allocated (`/v1/models` authenticates fine;
-  `/v1/chat/completions` returns 429 with `x-ratelimit-limit-req-minute: 0`), which the
-  provider now detects and reports as a distinct `LLMQuotaError` rather than retrying a
-  zero allowance three times and calling it throttling.
+- **n=20 for the live numbers.** Enough to show the retry is doing real work and to
+  settle the threshold; not enough to separate three models whose first-attempt rates
+  differ by five points.
+- **Prose quality is unmeasured.** Everything above scores whether a summary is
+  *grounded*, not whether it is *good*. A grounded summary can still be a bland
+  restatement of the first sentence, and nothing here would catch that.
 
 ---
 
@@ -597,7 +666,7 @@ Stage 2's ranking needs.
 
 ```bash
 cd backend
-python -m pytest          # 304 tests
+python -m pytest          # 316 tests
 python -m ruff check app tests
 ```
 
