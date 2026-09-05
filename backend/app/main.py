@@ -28,7 +28,11 @@ from app.services.ranking.cache import CachedEmbedder
 from app.services.ranking.embeddings import build_embedder
 from app.services.ranking.hybrid import FusionStrategy, HybridRanker
 from app.services.search_service import SearchService
+from app.services.summarization.grounding import GroundingChecker
+from app.services.summarization.provider import build_provider
+from app.services.summarization.summarizer import PaperSummarizer
 from app.sources.registry import SourceRegistry
+from app.storage.summary_cache import SummaryCache
 
 logger = get_logger(__name__)
 
@@ -49,25 +53,35 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         else None
     )
     extractor = await _build_entity_extractor(settings)
+    cache = _build_summary_cache(settings)
+    summarizer = _build_summarizer(settings, cache)
 
     app.state.registry = registry
     app.state.embedder = embedder
     app.state.ranker = ranker
     app.state.clusterer = clusterer
     app.state.entity_extractor = extractor
-    app.state.search_service = SearchService(registry, settings, ranker, extractor, clusterer)
+    app.state.summary_cache = cache
+    app.state.summarizer = summarizer
+    app.state.search_service = SearchService(
+        registry, settings, ranker, extractor, clusterer, summarizer
+    )
     logger.info(
-        "%s started | sources: %s | ranking: %s | entities: %s | clustering: %s",
+        "%s started | sources: %s | ranking: %s | entities: %s | clustering: %s "
+        "| summaries: %s",
         settings.app_name,
         ", ".join(source.display_name for source in registry.all()),
         f"{ranker.strategy.value} on {ranker.model_id}" if ranker else "disabled",
         extractor.model_id if extractor else "disabled",
         "on" if clusterer else "disabled",
+        summarizer.model_id if summarizer else "disabled",
     )
     try:
         yield
     finally:
         await registry.aclose()
+        if cache is not None:
+            cache.close()
         logger.info("shutdown complete")
 
 
@@ -107,6 +121,37 @@ async def _build_entity_extractor(settings: Settings) -> EntityExtractor | None:
     if not settings.entities_enabled:
         return None
     return await asyncio.to_thread(build_entity_extractor, settings.ner_model)
+
+
+def _build_summary_cache(settings: Settings) -> SummaryCache | None:
+    """Open the SQLite summary cache, or ``None`` if caching is off."""
+    if not settings.summaries_enabled or not settings.summary_cache_path:
+        return None
+    return SummaryCache(settings.summary_cache_path)
+
+
+def _build_summarizer(
+    settings: Settings, cache: SummaryCache | None
+) -> PaperSummarizer | None:
+    """Construct the summarizer.
+
+    Note that a missing API key does not disable this stage. The provider
+    comes back as ``None`` and the summarizer produces extractive summaries
+    instead, so the feature still works - visibly worse and clearly
+    labelled - on a clone with no credentials.
+    """
+    if not settings.summaries_enabled:
+        return None
+    provider = build_provider(
+        settings.llm_provider, settings.mistral_api_key, settings.summary_model
+    )
+    return PaperSummarizer(
+        provider,
+        checker=GroundingChecker(min_overlap=settings.grounding_min_overlap),
+        cache=cache,
+        max_concurrent=settings.summary_max_concurrent,
+        max_attempts=settings.summary_max_attempts,
+    )
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

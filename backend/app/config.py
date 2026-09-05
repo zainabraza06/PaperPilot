@@ -88,6 +88,30 @@ class Settings(BaseSettings):
     max_clusters: int = Field(default=6, ge=2, le=20)
     min_papers_to_cluster: int = Field(default=8, ge=2)
 
+    # --- summarization (Stage 4) -------------------------------------------
+    summaries_enabled: bool = True
+    llm_provider: str = Field(
+        default="mistral",
+        description="LLM provider for summaries: mistral | none.",
+    )
+    mistral_api_key: str | None = Field(
+        default=None,
+        description=(
+            "Without a key the app still runs: summaries fall back to "
+            "extractive sentences taken verbatim from the abstract."
+        ),
+    )
+    summary_model: str = "mistral-small-latest"
+    summary_max_concurrent: int = Field(default=5, ge=1, le=20)
+    summary_max_attempts: int = Field(
+        default=2, ge=1, le=4, description="Generation attempts before falling back."
+    )
+    grounding_min_overlap: float = Field(default=0.55, ge=0.0, le=1.0)
+    summary_cache_path: str = Field(
+        default="data/paperpilot.db",
+        description="SQLite file for cached summaries. Empty disables caching.",
+    )
+
     ranking_alpha: float = Field(
         default=0.6,
         ge=0.0,

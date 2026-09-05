@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.text import normalize_doi, normalize_title
 from app.models.entities import Entity
+from app.models.summary import Summary
 
 
 class SourceName(str, Enum):
@@ -126,7 +127,11 @@ class Paper(BaseModel):
     # --- ranking (populated by the ranker, absent before Stage 2 runs) ---
     score: RelevanceScore | None = None
 
-    # --- enrichment (populated by Stage 3, absent until it runs) ---------
+    # --- enrichment (populated by Stages 3-4, absent until they run) -----
+    summary: Summary | None = Field(
+        default=None,
+        description="AI or extractive summary, carrying its own grounding verdict.",
+    )
     entities: list[Entity] = Field(
         default_factory=list,
         description="Named entities found in the title and abstract, with spans.",

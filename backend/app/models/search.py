@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.models.clusters import ClusteringReport, TopicCluster
 from app.models.paper import Paper, SourceName
+from app.models.summary import SummaryReport
 
 
 class QueryIntent(str, Enum):
@@ -172,6 +173,9 @@ class SearchResponse(BaseModel):
     )
     entities: EnrichmentReport = Field(
         default_factory=lambda: EnrichmentReport(applied=False)
+    )
+    summaries: SummaryReport = Field(
+        default_factory=lambda: SummaryReport(applied=False)
     )
 
     @property

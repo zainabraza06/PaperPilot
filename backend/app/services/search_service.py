@@ -32,6 +32,7 @@ from app.core.errors import (
 )
 from app.core.logging import get_logger
 from app.models.clusters import ClusteringReport, TopicCluster
+from app.models.entities import Entity
 from app.models.paper import Paper, SourceName
 from app.models.search import (
     EnrichmentReport,
@@ -45,11 +46,13 @@ from app.models.search import (
     SourceResult,
     SourceStatus,
 )
+from app.models.summary import Summary, SummaryReport
 from app.services.dedupe import deduplicate
 from app.services.enrichment.clustering import TopicClusterer
 from app.services.enrichment.entities import EntityExtractor
 from app.services.query_parser import parse_query
 from app.services.ranking.hybrid import HybridRanker
+from app.services.summarization.summarizer import PaperSummarizer
 from app.sources.base import PaperSource, SupportsArxivLookup, SupportsPmidLookup
 from app.sources.registry import SourceRegistry
 
@@ -66,12 +69,14 @@ class SearchService:
         ranker: HybridRanker | None = None,
         entity_extractor: EntityExtractor | None = None,
         clusterer: TopicClusterer | None = None,
+        summarizer: PaperSummarizer | None = None,
     ) -> None:
         self._registry = registry
         self._settings = settings
         self._ranker = ranker
         self._entity_extractor = entity_extractor
         self._clusterer = clusterer
+        self._summarizer = summarizer
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         started = time.perf_counter()
@@ -92,13 +97,20 @@ class SearchService:
         merged = deduplicate(_interleave(results))
         papers, ranking = await self._rank(parsed, merged.papers)
 
-        # Entity extraction and clustering are independent of each other and
-        # both CPU-bound, so they run concurrently in worker threads.
-        (papers, entities), (clusters, clustering) = await asyncio.gather(
+        # The three enrichment passes are independent, and one of them is
+        # network-bound while the others are CPU-bound, so they overlap well.
+        # Each returns its own product rather than a mutated paper list, so
+        # merging them afterwards is a single unambiguous pass.
+        (
+            (entity_lists, entities),
+            (clusters, clustering),
+            (summaries, summary_report),
+        ) = await asyncio.gather(
             self._extract_entities(papers),
             self._cluster(papers),
+            self._summarize(papers),
         )
-        _assign_clusters(papers, clusters)
+        papers = _apply_enrichment(papers, entity_lists, summaries, clusters)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
         return SearchResponse(
@@ -112,14 +124,15 @@ class SearchService:
             clusters=clusters,
             clustering=clustering,
             entities=entities,
+            summaries=summary_report,
         )
 
     async def _extract_entities(
         self, papers: list[Paper]
-    ) -> tuple[list[Paper], EnrichmentReport]:
-        """Attach named entities to each paper, degrading to none on failure."""
+    ) -> tuple[list[list[Entity]], EnrichmentReport]:
+        """Find named entities per paper, degrading to none on failure."""
         if self._entity_extractor is None or not papers:
-            return papers, EnrichmentReport(
+            return [], EnrichmentReport(
                 applied=False,
                 reason="entity extraction is disabled"
                 if self._entity_extractor is None
@@ -131,21 +144,37 @@ class SearchService:
             per_paper = await asyncio.to_thread(self._entity_extractor.extract, papers)
         except Exception as exc:
             logger.exception("entity extraction failed")
-            return papers, EnrichmentReport(applied=False, reason=f"NER failed: {exc}")
+            return [], EnrichmentReport(applied=False, reason=f"NER failed: {exc}")
 
-        enriched = []
-        total = 0
-        for paper, found in zip(papers, per_paper, strict=True):
-            copy = paper.model_copy(update={"entities": found})
-            total += len(found)
-            enriched.append(copy)
-
-        return enriched, EnrichmentReport(
+        return per_paper, EnrichmentReport(
             applied=True,
             model=self._entity_extractor.model_id,
-            entities_found=total,
+            entities_found=sum(len(found) for found in per_paper),
             elapsed_ms=int((time.perf_counter() - started) * 1000),
         )
+
+    async def _summarize(
+        self, papers: list[Paper]
+    ) -> tuple[list[Summary], SummaryReport]:
+        """Summarize each paper, degrading to none on failure.
+
+        The summarizer already falls back to extractive text internally, so
+        reaching the except branch means something outside that policy
+        broke — and a search is still worth returning without summaries.
+        """
+        if self._summarizer is None or not papers:
+            return [], SummaryReport(
+                applied=False,
+                reason="summarization is disabled"
+                if self._summarizer is None
+                else "no papers to summarize",
+            )
+        try:
+            summarized, report = await self._summarizer.summarize(papers)
+        except Exception as exc:
+            logger.exception("summarization failed")
+            return [], SummaryReport(applied=False, reason=f"summarization failed: {exc}")
+        return [paper.summary for paper in summarized if paper.summary], report
 
     async def _cluster(
         self, papers: list[Paper]
@@ -290,20 +319,36 @@ class SearchService:
         return None
 
 
-def _assign_clusters(papers: list[Paper], clusters: Sequence[TopicCluster]) -> None:
-    """Stamp each paper with its cluster id.
+def _apply_enrichment(
+    papers: list[Paper],
+    entity_lists: Sequence[Sequence[Entity]],
+    summaries: Sequence[Summary],
+    clusters: Sequence[TopicCluster],
+) -> list[Paper]:
+    """Fold every enrichment pass onto the papers in one pass.
 
-    Denormalized onto the paper as well as listed on the cluster because
-    the results list renders per-paper and should not have to search every
-    cluster's membership to find a badge.
+    Each pass produced its own output independently and possibly not at
+    all, so this is where partial results get reconciled: a stage that
+    returned nothing simply contributes nothing, and the others still land.
+
+    Cluster membership is denormalized onto the paper as well as listed on
+    the cluster because the results list renders per-paper and should not
+    have to search every cluster's membership to find a badge.
     """
-    if not clusters:
-        return
-    lookup = {
+    cluster_of = {
         paper_id: cluster.id for cluster in clusters for paper_id in cluster.paper_ids
     }
-    for paper in papers:
-        paper.cluster_id = lookup.get(paper.id)
+    enriched: list[Paper] = []
+    for index, paper in enumerate(papers):
+        updates: dict[str, object] = {}
+        if index < len(entity_lists):
+            updates["entities"] = list(entity_lists[index])
+        if index < len(summaries):
+            updates["summary"] = summaries[index]
+        if paper.id in cluster_of:
+            updates["cluster_id"] = cluster_of[paper.id]
+        enriched.append(paper.model_copy(update=updates) if updates else paper)
+    return enriched
 
 
 def _interleave(results: Sequence[SourceResult]) -> list[Paper]:
