@@ -41,14 +41,14 @@ from typing import NamedTuple
 from app.config import get_settings
 from app.core.logging import configure_logging
 from app.models.paper import Paper
+from app.services.enrichment.clustering import TopicClusterer
+from app.services.ranking.cache import CachedEmbedder
 from app.services.ranking.embeddings import Embedder, build_embedder
 from app.services.ranking.evaluation import (
     RankingMetrics,
     average_metrics,
     evaluate_ranking,
 )
-from app.services.enrichment.clustering import TopicClusterer
-from app.services.ranking.cache import CachedEmbedder
 from app.services.ranking.hybrid import FusionStrategy, HybridRanker
 
 EVAL_DIR = Path(__file__).resolve().parent.parent / "eval"
