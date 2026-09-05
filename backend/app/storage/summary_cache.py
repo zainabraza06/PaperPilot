@@ -26,13 +26,19 @@ not.
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.logging import get_logger
-from app.models.summary import GroundingVerdict, Summary, SummaryOrigin
+from app.models.summary import (
+    GroundingIssue,
+    GroundingVerdict,
+    Summary,
+    SummaryOrigin,
+)
 
 logger = get_logger(__name__)
 
@@ -45,6 +51,7 @@ CREATE TABLE IF NOT EXISTS summaries (
     text               TEXT    NOT NULL,
     origin             TEXT    NOT NULL,
     grounding          TEXT    NOT NULL,
+    rejected_for       TEXT    NOT NULL DEFAULT '[]',
     attempts           INTEGER NOT NULL DEFAULT 1,
     created_at         TEXT    NOT NULL,
     PRIMARY KEY (paper_id, model, prompt_version, source_fingerprint)
@@ -91,7 +98,7 @@ class SummaryCache:
         """Return the cached summary for this exact input, if any."""
         with self._lock:
             row = self._connection.execute(
-                "SELECT text, origin, grounding, attempts FROM summaries "
+                "SELECT text, origin, grounding, rejected_for, attempts FROM summaries "
                 "WHERE paper_id = ? AND model = ? AND prompt_version = ? "
                 "AND source_fingerprint = ?",
                 (paper_id, model, prompt_version, source_fingerprint),
@@ -101,6 +108,10 @@ class SummaryCache:
         try:
             verdict = GroundingVerdict.model_validate_json(row["grounding"])
             origin = SummaryOrigin(row["origin"])
+            rejected = [
+                GroundingIssue.model_validate(item)
+                for item in json.loads(row["rejected_for"] or "[]")
+            ]
         except Exception:
             logger.warning("discarding unreadable cache row for %s", paper_id)
             return None
@@ -108,6 +119,7 @@ class SummaryCache:
             text=row["text"],
             origin=origin,
             grounding=verdict,
+            rejected_for=rejected,
             # An extractive fallback is filed under the configured model but
             # was not produced by it; report the method that actually wrote
             # the text so the UI never mislabels it as AI-generated.
@@ -138,7 +150,8 @@ class SummaryCache:
             self._connection.execute(
                 "INSERT OR REPLACE INTO summaries "
                 "(paper_id, model, prompt_version, source_fingerprint, text, origin, "
-                " grounding, attempts, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " grounding, rejected_for, attempts, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     paper_id,
                     model,
@@ -147,6 +160,7 @@ class SummaryCache:
                     summary.text,
                     summary.origin.value,
                     summary.grounding.model_dump_json(),
+                    json.dumps([i.model_dump(mode="json") for i in summary.rejected_for]),
                     summary.attempts,
                     datetime.now(UTC).isoformat(),
                 ),

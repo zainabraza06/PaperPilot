@@ -99,6 +99,14 @@ class Summary(BaseModel):
     prompt_version: int = 1
     attempts: int = Field(default=1, ge=1, description="Generation attempts made.")
     cached: bool = False
+    rejected_for: list[GroundingIssue] = Field(
+        default_factory=list,
+        description=(
+            "Why the first attempt was rejected, kept even when a retry "
+            "rescued it. The final verdict says the text shown is sound; "
+            "this says what it took to get there."
+        ),
+    )
 
     @property
     def is_ai_generated(self) -> bool:

@@ -132,6 +132,9 @@ class PaperSummarizer:
 
         previous_text = ""
         issues: list[GroundingIssue] = []
+        # Kept across attempts so a rescued summary still records what was
+        # wrong with the first try - that is the signal worth measuring.
+        first_rejection: list[GroundingIssue] = []
         for attempt in range(1, self._max_attempts + 1):
             prompt = (
                 build_user_prompt(paper.title, paper.abstract)
@@ -156,7 +159,10 @@ class PaperSummarizer:
                     model=self._provider.model_id,
                     prompt_version=PROMPT_VERSION,
                     attempts=attempt,
+                    rejected_for=first_rejection,
                 )
+            if not first_rejection:
+                first_rejection = list(verdict.issues)
             previous_text, issues = text, verdict.issues
             logger.info(
                 "summary for %s failed grounding on attempt %d: %s",
@@ -165,9 +171,16 @@ class PaperSummarizer:
                 ", ".join(issue.kind.value for issue in issues),
             )
 
-        return self._extractive_summary(paper, attempts=self._max_attempts)
+        return self._extractive_summary(
+            paper, attempts=self._max_attempts, rejected_for=first_rejection
+        )
 
-    def _extractive_summary(self, paper: Paper, attempts: int = 1) -> Summary:
+    def _extractive_summary(
+        self,
+        paper: Paper,
+        attempts: int = 1,
+        rejected_for: list[GroundingIssue] | None = None,
+    ) -> Summary:
         """Sentences from the abstract, grounded because they *are* the abstract."""
         text = self._extractive.summarize(paper.title, paper.abstract)
         status = (
@@ -180,6 +193,7 @@ class PaperSummarizer:
             model=self._extractive.model_id,
             prompt_version=PROMPT_VERSION,
             attempts=attempts,
+            rejected_for=list(rejected_for or []),
         )
 
     # --- cache -------------------------------------------------------------
