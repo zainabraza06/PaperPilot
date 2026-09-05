@@ -89,9 +89,16 @@ _OVERCLAIM_TERMS = frozenset(
 )
 
 #: Below this share of content words in common, the summary is about
-#: something else. Tuned on the golden-set abstracts; see
-#: scripts/evaluate_grounding.py for the measurement.
-_MIN_OVERLAP = 0.55
+#: something else.
+#:
+#: Measured rather than guessed, in two directions. Sweeping the labelled
+#: set, 0.45 is the lowest value that still detects 100% of wrong-paper
+#: cases (0.40 drops to 99.3%, 0.30 to 97.3%). Against live generation, it
+#: raises first-attempt acceptance from 50% to 80% versus 0.55 - the
+#: stricter value was rejecting genuine paraphrase, which cost a retry and
+#: pushed 15% of papers to extractive text for no gain in drift detection.
+#: See scripts/evaluate_grounding.py and scripts/evaluate_summaries.py.
+_MIN_OVERLAP = 0.45
 
 #: The prompt asks for 2-3 sentences; one extra is tolerated before it is
 #: reported, because sentence splitting on scientific text is imprecise.
