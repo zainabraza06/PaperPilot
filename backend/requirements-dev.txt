@@ -5,3 +5,9 @@ pytest-asyncio==0.25.0
 respx==0.22.0
 ruff==0.8.4
 mypy==1.14.0
+
+# Independent parsers used to round-trip the citation exports. Asserting
+# that another implementation reads back what we meant is the only way to
+# claim spec correctness rather than "it looks right".
+bibtexparser==1.4.1
+rispy==0.9.0
