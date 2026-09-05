@@ -3,10 +3,10 @@
 AI-powered scientific literature search across **PubMed**, **arXiv** and **Crossref** —
 one query, one ranked list, AI summaries, one-click citation export.
 
-> **Status: Stages 1–2 complete — multi-source retrieval and hybrid ranking,
-> with measured Recall@k / NDCG@k on a hand-judged golden set.**
-> Clustering (Stage 3), summarization (Stage 4), citation export (Stage 5),
-> the React frontend (Stage 6) and packaging (Stage 7) are in progress.
+> **Status: Stages 1–3 complete — multi-source retrieval, hybrid ranking with
+> measured Recall@k / NDCG@k on a hand-judged golden set, and NER + topic
+> clustering.** Summarization (Stage 4), citation export (Stage 5), the React
+> frontend (Stage 6) and packaging (Stage 7) are in progress.
 
 ---
 
@@ -39,16 +39,17 @@ pip install -r requirements-dev.txt
 # One real query against all three live APIs
 python -m scripts.demo_search "prime editing in primary human cells"
 
-# Compare ranking strategies on the golden set
-python -m scripts.evaluate_ranking --per-query --sweep-alpha
+# Compare ranking strategies on the golden set, and report clustering
+python -m scripts.evaluate_ranking --per-query --sweep-alpha --clusters
 
 # Or run the API
 uvicorn app.main:app --reload
 # → http://127.0.0.1:8000/docs
 ```
 
-The first run downloads the embedding model (~90 MB). It is loaded once at startup,
-in a worker thread, so no search pays for it.
+The first run downloads the embedding model (~90 MB) and needs a spaCy model
+(`python -m spacy download en_core_web_sm`). Both load once at startup, in a worker
+thread, so no search pays for them — and both degrade rather than fail if absent.
 
 No API keys or configuration are required. See [`backend/.env.example`](backend/.env.example)
 for the optional keys that raise rate limits.
@@ -211,6 +212,126 @@ were ranked.
 
 ---
 
+## Stage 3 — entities and topic clusters
+
+Two enrichment passes run over the ranked set, concurrently, in worker threads.
+
+### NER, and being honest about a general-purpose model
+
+The brief asks for spaCy "or a scientific-domain model like SciSpacy if available".
+SciSpacy is not installed here, and the difference is not cosmetic. Run
+`en_core_web_sm` — trained on news — over a real abstract and it returns:
+
+| span | label | verdict |
+|---|---|---|
+| `pegRNA improves CRISPR-Cas9` | `LAW` | a technique read as legislation |
+| `HEK293` | `GPE` | a cell line read as a country |
+| `CRISPR-Cas9`, `FAB-CRISPR`, `HDR` | `ORG` | assays read as companies |
+| `Transformer` | `ORG` | an architecture read as a company |
+| `the Broad Institute` | `ORG` | correct |
+
+So the extractor runs **two passes** and scopes how far it trusts each:
+
+1. **Model NER**, with labels normalized onto one `EntityLabel` vocabulary so the API
+   contract does not change when the model does. If a SciSpacy model *is* installed it
+   is preferred and its labels are trusted in full. A general model is trusted only for
+   `ORG` and `PERSON`, and only past three guards, each written after an observed
+   failure above: reject spans shaped like technical terms, reject everything from the
+   title (title case reads as proper nouns to a news model), and reject single-word
+   `ORG`s without an institutional suffix.
+2. **Pattern extraction** for the symbol-shaped terms a news model has never seen as a
+   category — `pegRNA`, `CRISPR-Cas9`, `BRCA1`, `scRNA-seq`, `PE3`, `SARS-CoV-2`. These
+   are what a researcher actually scans for. It only fills spans the first pass did not
+   claim, so highlights never overlap.
+
+After the guards, the same abstract yields `Broad Institute` and `Google Brain` as
+organizations and `pegRNA`, `BERT`, `HEK293T`, `scRNA-seq` as technical terms.
+
+Entities carry **every occurrence as character offsets into a named field**, so the
+frontend can highlight inline in the title and abstract independently. A surface form
+gets exactly one label — grouping by `(text, label)` previously let `PE` appear twice
+in one paper, as a technical term and an organization, which is noise in a filter list
+and a bug in a highlight layer.
+
+### Clustering, and why silhouette alone is the wrong objective
+
+Choosing *k* by maximizing silhouette is the obvious approach and it is wrong here. On
+the 24-paper "diffusion models" pool, the best-scoring partition was **23 papers plus
+one singleton, silhouette 0.481** — a near-perfect score for a split that gives a user
+nothing to click. Average linkage on cosine distance produced that same singleton
+chaining on every query tested.
+
+Two changes, both measured:
+
+- **Ward linkage** instead of average. It minimizes within-cluster variance and
+  produced balanced partitions instead (`[15, 7]`, `[18, 6]`, `[16, 4, 3]`). Ward needs
+  Euclidean distance, which is legitimate because the embedder returns L2-normalized
+  vectors — squared Euclidean is then `2(1 − cosine)`, the same geometry.
+- **Usability constraints** that silhouette does not measure: no cluster below 3
+  papers, and no cluster holding more than 80% of the set. When no *k* satisfies both,
+  the honest answer is that the result set is one coherent topic, and that is what gets
+  reported.
+
+Cluster names come from **c-TF-IDF** — term frequency within a cluster, discounted by
+how many clusters contain the term, times the share of the term's occurrences falling
+in that cluster. The exclusivity factor was a measured addition: without it the smaller
+clusters were named in the parent topic's vocabulary (`alphafold · protein ·
+prediction`); with it they name themselves (`alphafold · alphafold-multimer ·
+differentiable`).
+
+### What it does on the golden set
+
+`python -m scripts.evaluate_ranking --clusters`
+
+```
+prime-editing          n=24  k=2  sizes=18/6     silhouette=0.4205
+    [18] prime · editing · cells
+    [ 6] irradiation · solar · critical        <- the off-topic papers, isolated
+transformer-attention  n=23  k=3  sizes=16/4/3   silhouette=0.1995
+    [16] models · attention · language
+    [ 4] segmentation · medical · boundaries
+    [ 3] molecular · clms · risk
+protein-folding        n=22  k=2  sizes=15/7     silhouette=0.1282
+    [15] protein · structure · prediction
+    [ 7] alphafold · alphafold-multimer · differentiable
+gnn-molecular          n=23  not split — one coherent topic
+diffusion-image        n=24  not split — one coherent topic
+```
+
+**5 of 8 pools split into sub-topics; 3 correctly declined.** This is reported
+descriptively rather than scored: nobody hand-labelled the "correct" sub-topics for
+these queries, so there is no ground truth to compute an accuracy against. Publishing
+one anyway would be a worse claim than publishing none. The silhouette scores, group
+sizes and generated labels are printed so a reader can judge the output themselves.
+
+### Both stages degrade like the rest of the pipeline
+
+`EnrichmentReport` and `ClusteringReport` mirror `SourceReport` and `RankingReport`. If
+no spaCy model can be loaded, extraction falls back to pattern-only and says so in
+`entities.model`. If a result set is too small to cluster, or refuses to split, that is
+a reported state with a reason — not an empty list the UI has to guess about.
+
+### One embedding pass, not two
+
+Ranking and clustering both embed the same papers. A `CachedEmbedder` wraps the model
+with an LRU keyed by a digest of the text, so the second consumer reads its vectors out
+of the cache instead of paying for another forward pass — roughly two seconds saved per
+search on a 24-paper set. Misses are still encoded as one batch, because batching is
+most of a transformer's CPU throughput. The cache outlives a single request too, so a
+paper appearing in two refinements of a query is embedded once.
+
+### Known limitations
+
+- **No SciSpacy.** Its models are the right tool and would replace the pattern pass
+  with typed diseases, chemicals and genes. The code already prefers them if installed;
+  the label map and the trust switch are in place.
+- **Residual ORG false positives.** The guards remove the systematic failures, not
+  every one.
+- **Clustering has no ground truth here** — see above.
+- **Cluster labels are bag-of-words**, so they read as term lists rather than phrases.
+
+---
+
 ## Architecture
 
 ```
@@ -241,8 +362,19 @@ were ranked.
                         │   (fusion strategies)    │  fused and scored
                         └────────────┬─────────────┘
                                      ▼
-                         ranked Paper[] + RelevanceScore
+              ┌──────────────────────┴──────────────────────┐
+              ▼                                             ▼
+      ┌───────────────────┐                     ┌───────────────────────┐
+      │  EntityExtractor  │  model NER +        │    TopicClusterer     │
+      │   (spaCy + rules) │  shape patterns     │ (ward + c-TF-IDF)     │
+      └─────────┬─────────┘                     └───────────┬───────────┘
+                └──────────────────┬────────────────────────┘
+                                   ▼
+              ranked Paper[] + scores + entities + clusters
 ```
+
+The embedder is shared between the ranker and the clusterer behind an LRU cache, so
+a result set is embedded once per search rather than twice.
 
 Every connector implements one interface:
 
@@ -267,7 +399,8 @@ backend/app/
 ├── core/           # text normalization, errors, logging, rate limiting, safe XML
 ├── models/         # Paper, Author, and the search request/response contract
 ├── services/       # query parsing, deduplication, search orchestration
-│   └── ranking/    # document view, embeddings, BM25, fusion, IR metrics
+│   ├── enrichment/ # NER (spaCy + shape patterns) and topic clustering
+│   └── ranking/    # document view, embeddings, cache, BM25, fusion, IR metrics
 └── sources/        # PaperSource interface + one module per provider
 
 backend/eval/       # golden set: queries, frozen candidate pool, judgments
@@ -329,7 +462,7 @@ Stage 2's ranking needs.
 
 ```bash
 cd backend
-python -m pytest          # 184 tests
+python -m pytest          # 250 tests
 python -m ruff check app tests
 ```
 
@@ -356,6 +489,9 @@ Coverage is concentrated where interviews probe:
 | Retries, rate limits, timeouts | `tests/test_http_behaviour.py` |
 | Embedders, BM25, and the fusion strategies | `tests/test_ranking.py` |
 | IR metrics, hand-computed from their definitions | `tests/test_ranking_evaluation.py` |
+| Entity patterns, label normalization, trust guards | `tests/test_entities.py` |
+| Cluster selection, labelling, and refusal to split | `tests/test_clustering.py` |
+| Embedding cache correctness and eviction | `tests/test_embedding_cache.py` |
 
 ---
 
@@ -376,6 +512,7 @@ Interactive docs at `/docs` when the server is running.
 
 **Backend** Python 3.12 · FastAPI · Pydantic v2 · httpx (async) · defusedxml
 **Ranking** sentence-transformers (`all-MiniLM-L6-v2`) · rank-bm25 · NumPy
+**Enrichment** spaCy (SciSpacy-ready) · scikit-learn (Ward agglomerative)
 **Testing** pytest · pytest-asyncio · respx · ruff · mypy (strict)
-**Coming** spaCy/SciSpacy + HDBSCAN (Stage 3) · grounded LLM summarization
-(Stage 4) · React + TypeScript + Tailwind (Stage 6) · Docker Compose (Stage 7)
+**Coming** grounded LLM summarization (Stage 4) · citation export (Stage 5) ·
+React + TypeScript + Tailwind (Stage 6) · Docker Compose (Stage 7)
