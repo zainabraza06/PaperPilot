@@ -15,3 +15,12 @@ sentence-transformers==3.3.1
 # Okapi BM25 for the lexical half of the hybrid.
 rank-bm25==0.2.2
 numpy>=1.26,<3
+
+# --- enrichment: NER and clustering (Stage 3) --------------------------
+# NER. A SciSpacy biomedical model is preferred when installed; the
+# general model is the fallback and its labels are trusted selectively.
+# The model itself is a separate download:
+#   python -m spacy download en_core_web_sm
+spacy>=3.8,<3.9
+# Ward agglomerative clustering and the silhouette score.
+scikit-learn==1.6.0

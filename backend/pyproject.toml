@@ -43,5 +43,5 @@ disallow_untyped_defs = true
 plugins = []
 
 [[tool.mypy.overrides]]
-module = ["defusedxml.*", "respx.*", "rank_bm25.*", "sentence_transformers.*"]
+module = ["defusedxml.*", "respx.*", "rank_bm25.*", "sentence_transformers.*", "sklearn.*", "spacy.*", "hdbscan.*"]
 ignore_missing_imports = true
