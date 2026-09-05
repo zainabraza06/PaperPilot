@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import re
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
@@ -173,7 +174,30 @@ class MistralProvider:
             raise LLMUnavailableError(f"unexpected response shape: {exc}") from exc
         if not isinstance(content, str) or not content.strip():
             raise LLMUnavailableError("provider returned an empty completion")
-        return content.strip()
+        return strip_markdown(content)
+
+
+#: Markdown emphasis the model adds despite being told not to. Underscores
+#: are deliberately left alone: they occur inside real identifiers
+#: (``TP53_mutant``, ``log_2``) far more often than as italics here.
+_EMPHASIS = re.compile(r"\*{1,3}(?=\S)(.+?)(?<=\S)\*{1,3}", re.DOTALL)
+_CODE_SPAN = re.compile(r"`{1,3}(?=\S)(.+?)(?<=\S)`{1,3}", re.DOTALL)
+_LEADING_MARKER = re.compile(r"^\s*(?:[-*+]\s+|#{1,6}\s+|>\s+)", re.MULTILINE)
+
+
+def strip_markdown(text: str) -> str:
+    """Remove markdown formatting a model added despite the instruction.
+
+    A prompt is a request, not a guarantee, so the rule is enforced here as
+    well as asked for. Without this a summary reaches the UI as
+    "replaces **CRISPR-Cas9** with **Cas12a**" and renders with literal
+    asterisks - or, worse, the frontend starts rendering model output as
+    markdown to compensate, which is an injection surface.
+    """
+    cleaned = _LEADING_MARKER.sub("", text)
+    cleaned = _EMPHASIS.sub(r"\1", cleaned)
+    cleaned = _CODE_SPAN.sub(r"\1", cleaned)
+    return " ".join(cleaned.split())
 
 
 def _has_no_quota(response: httpx.Response) -> bool:

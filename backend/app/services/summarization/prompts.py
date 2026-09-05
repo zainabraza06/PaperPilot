@@ -18,7 +18,11 @@ from app.models.summary import GroundingIssue
 
 #: Bump on any change below. Cached summaries from older versions are
 #: ignored rather than served, so a prompt fix takes effect immediately.
-PROMPT_VERSION = 1
+#:
+#: v2 forbids markdown emphasis. The model was returning "replaces
+#: **CRISPR-Cas9** with the smaller **Cas12a**", which a web UI renders as
+#: literal asterisks.
+PROMPT_VERSION = 2
 
 SYSTEM_PROMPT = """You summarize scientific paper abstracts for researchers.
 
@@ -35,7 +39,8 @@ something increased, do not write that it decreased or changed.
 - If the abstract is vague, be vague. Do not fill gaps.
 
 Write plain prose. No preamble, no bullet points, no headings, no citation \
-markers. Return only the summary text."""
+markers, and no markdown formatting of any kind - no **bold**, no *italics*, \
+no `code`. Return only the summary text."""
 
 
 def build_user_prompt(title: str, abstract: str) -> str:

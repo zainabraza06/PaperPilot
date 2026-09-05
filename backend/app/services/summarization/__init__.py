@@ -8,6 +8,7 @@ from app.services.summarization.provider import (
     LLMQuotaError,
     MistralProvider,
     build_provider,
+    strip_markdown,
 )
 from app.services.summarization.summarizer import PaperSummarizer
 
@@ -20,4 +21,5 @@ __all__ = [
     "MistralProvider",
     "PaperSummarizer",
     "build_provider",
+    "strip_markdown",
 ]

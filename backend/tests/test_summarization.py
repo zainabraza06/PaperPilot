@@ -23,6 +23,7 @@ from app.services.summarization.provider import (
     LLMUnavailableError,
     MistralProvider,
     build_provider,
+    strip_markdown,
 )
 from app.services.summarization.summarizer import PaperSummarizer
 from app.storage.summary_cache import SummaryCache, fingerprint
@@ -478,3 +479,41 @@ async def test_a_quota_failure_still_yields_an_extractive_summary() -> None:
     assert papers[0].summary is not None
     assert papers[0].summary.origin is SummaryOrigin.EXTRACTIVE
     assert report.applied is True
+
+
+# --- markdown stripping ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("Replaces **CRISPR-Cas9** with **Cas12a**.", "Replaces CRISPR-Cas9 with Cas12a."),
+        ("The *key* finding was clear.", "The key finding was clear."),
+        ("Uses `pegRNA` templates.", "Uses pegRNA templates."),
+        ("- A bulleted claim.", "A bulleted claim."),
+        ("## Heading\nThen prose.", "Heading Then prose."),
+        ("Plain prose is untouched.", "Plain prose is untouched."),
+        # Underscores occur inside real identifiers far more often than as
+        # emphasis, so they are deliberately left alone.
+        ("The TP53_mutant line was used.", "The TP53_mutant line was used."),
+        ("Efficiency was 42% (n=6).", "Efficiency was 42% (n=6)."),
+    ],
+)
+def test_markdown_is_stripped_from_completions(raw: str, expected: str) -> None:
+    assert strip_markdown(raw) == expected
+
+
+@respx.mock
+async def test_the_provider_strips_markdown_it_was_told_not_to_produce() -> None:
+    # A prompt is a request, not a guarantee. Without this the UI shows
+    # literal asterisks, or starts rendering model output as markdown to
+    # compensate - which is an injection surface.
+    respx.post("https://api.mistral.ai/v1/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "Uses **PE2** and *PE3* here."}}]},
+        )
+    )
+    provider = MistralProvider("key")
+    assert await provider.complete("s", "u") == "Uses PE2 and PE3 here."
+    await provider.aclose()
