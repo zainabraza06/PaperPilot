@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* A visible focus ring on keyboard navigation only. Removing it
+     entirely is the single most common accessibility regression in a
+     design-led UI, and this app is navigable end to end by keyboard. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent-500 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-950;
+  }
+
+  ::selection {
+    @apply bg-accent-200 text-accent-900 dark:bg-accent-800 dark:text-accent-50;
+  }
+}
+
+@layer components {
+  /* The one surface treatment, so every panel in the app agrees. */
+  .surface {
+    @apply rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded bg-slate-200 dark:bg-slate-800;
+  }
+
+  /* The shimmer is a child pseudo-element rather than an animated
+     background so it composites on the GPU and does not repaint the row. */
+  .skeleton::after {
+    @apply absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/50 to-transparent content-[''] dark:via-white/10;
+  }
+}
+
+/* Respect a stated preference for less motion: the animations here are
+   decorative and none of them carry information. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
