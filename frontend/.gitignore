@@ -1,0 +1,8 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# Playwright browser binaries live outside the repo, but its caches do not.
+/test-results/
+/playwright-report/
