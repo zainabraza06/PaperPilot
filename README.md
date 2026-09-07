@@ -3,10 +3,26 @@
 AI-powered scientific literature search across **PubMed**, **arXiv** and **Crossref** —
 one query, one ranked list, AI summaries, one-click citation export.
 
-> **Status: Stages 1–5 complete — multi-source retrieval, hybrid ranking with
+> **Status: Stages 1–6 complete — multi-source retrieval, hybrid ranking with
 > measured Recall@k / NDCG@k, NER + topic clustering, grounded AI summarization
-> with a measured fact-checking layer, and spec-correct citation export.**
-> The React frontend (Stage 6) and packaging (Stage 7) are in progress.
+> with a measured fact-checking layer, spec-correct citation export, and a
+> React frontend verified end to end in a real browser.**
+> Packaging (Stage 7) is in progress.
+
+---
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Results](docs/screenshots/04-results-light.png) | ![Results, dark](docs/screenshots/04-results-dark.png) |
+| **Ranked results** — source badges, relevance bars, AI summaries with their grounding verdict, extracted entities | **Dark mode**, respected from the OS preference before first paint |
+| ![Detail](docs/screenshots/08-detail-dark.png) | ![Pipeline](docs/screenshots/06-pipeline-status.png) |
+| **Paper detail** — entities highlighted inline in the abstract, and *why the first summary attempt was rejected* | **Pipeline transparency** — what every stage did, and which degraded |
+| ![Clusters](docs/screenshots/07-clusters.png) | ![Export](docs/screenshots/09-export-bar.png) |
+| **Sub-topic filters** — 39 papers narrowed to 23 in one click | **Bulk export** — select, pick a format, file downloads. No confirmation step |
+| ![Mobile](docs/screenshots/10-mobile.png) | ![Query hint](docs/screenshots/02-query-hint-light.png) |
+| **Responsive** at 390px, history as a drawer | **Live query-type detection**, classified server-side |
 
 ---
 
@@ -627,6 +643,112 @@ Try it without the API: `python -m scripts.demo_search "prime editing" --export 
 
 ---
 
+## Stage 6 — the frontend
+
+React 19, TypeScript in **full strict mode**, Tailwind. The parts worth arguing about:
+
+### Types are generated from the API, not written next to it
+
+`scripts/dump_openapi.py` dumps the FastAPI schema without starting a server, and
+`openapi-typescript` turns it into `src/types/api.ts`. Hand-written interfaces
+mirroring Pydantic models drift the moment a field is added, and drift *silently*.
+Generated ones turn a backend rename into a compile error.
+
+```bash
+cd backend && python -m scripts.dump_openapi
+cd ../frontend && npx openapi-typescript openapi.json -o src/types/api.ts
+```
+
+**This immediately found a backend bug.** Strict TypeScript reported
+`paper.entities` as `Entity[] | undefined`, because Pydantic marks any field with a
+default as *optional* in the JSON schema — reasonable for a request, wrong for a
+response, since the server always serializes those fields. The schema was
+under-describing what the API actually sends, and the cost was ~30 null checks in the
+UI for values that can never be absent. Fixed at the source with
+`json_schema_serialization_defaults_required` on a shared `ApiModel` base
+([`app/models/base.py`](backend/app/models/base.py)), not papered over in the client.
+
+### Strict mode means strict
+
+Beyond `strict: true`, this enables `noUncheckedIndexedAccess` and
+`exactOptionalPropertyTypes`. Those are the two that actually catch things here: the
+API is full of genuinely nullable fields, and they are what stops
+`paper.score.combined` from compiling when `score` may be null.
+
+### Every pipeline stage is visible
+
+The backend reports per-stage outcomes — sources, ranking, clustering, entities,
+summaries — and [`PipelineStatus`](frontend/src/components/PipelineStatus.tsx) is the
+component those reports were designed for. One quiet line when everything worked,
+expandable to per-stage detail, and an amber banner naming the specific source that
+failed. *"39 papers · 1 duplicate merged · arXiv unavailable"* is a real, useful
+state, not an error.
+
+Summaries carry their provenance for the same reason: `AI`, `AI · corrected` and
+`From abstract` are visually distinct, and the detail view shows **why a first attempt
+was rejected** — *"the summary states '12', which does not appear in the abstract"*.
+Rendering all three identically would throw away everything Stage 4 does.
+
+### Verified by driving a real browser
+
+[`scripts/capture.mjs`](frontend/scripts/capture.mjs) runs Playwright against both
+servers and asserts each flow, failing loudly rather than producing a screenshot of
+nothing. A frontend that typechecks and builds has proved nothing about whether it
+renders.
+
+```
+=== light ===                          === dark ===
+  ok  respects the light OS preference   ok  respects the dark OS preference
+  ok  detects the query type             ok  3 sub-topic tabs rendered
+  ok  renders 39 result cards            ok  filtering narrows 39 papers to 23
+  ok  7 entities highlighted inline      ok  downloads paperpilot-2-references.bib
+  ok  Escape closes the modal            ok  exactly the 2 selected papers
+  ok  no console errors (0)              ok  no console errors (0)
+=== mobile ===
+  ok  results render at 390px            ok  no horizontal overflow
+```
+
+It also verifies the *downloaded file*, not just that a button was clickable: the
+export must contain exactly the two selected papers as BibTeX entries.
+
+The screenshots above are what that run produced.
+
+### On latency, honestly
+
+A search takes **4–20 seconds**, and the search box is not "instant". Measured
+breakdown, all three sources healthy vs. one hung:
+
+```
+pubmed      ok         1949ms      ranking        7ms
+arxiv       timeout   12010ms      entities     751ms
+crossref    ok         2913ms      clusters      32ms
+                                   summaries   7663ms  (cold)
+                                   summaries     51ms  (cached)
+```
+
+The fan-out is concurrent, so retrieval costs the *slowest* source, not their sum —
+which means a hung source sets the floor. That is why the per-source budget was cut
+from 20s to 12s during this stage: 12s is the measured worst case for PubMed's
+two-call `esearch`/`efetch` pattern, so it is as low as it can go without cutting off
+a healthy source. Summarization is the other real cost, and it is paid once per paper
+thanks to the SQLite cache.
+
+Streaming results as each source lands would fix the perceived wait properly. That is
+an architectural change, not a polish item, and it is not done.
+
+### Known limitations
+
+- **No component tests.** The Playwright run is end-to-end verification, not a unit
+  suite; a broken component fails the whole capture rather than one assertion.
+- **No result virtualisation.** 39 cards is fine; 500 would not be.
+- **arXiv rate-limits by IP** and the block outlasts its documented 1-request-per-3-seconds
+  window. Heavy development traffic will trip it, and the per-process politeness
+  limiter resets on every restart — which is exactly how it got tripped here. The
+  screenshots show the resulting degraded state, which is at least an honest demo of
+  the feature designed for it.
+
+---
+
 ## Architecture
 
 ```
@@ -698,6 +820,12 @@ codebase names a concrete connector.
 ### Layout
 
 ```
+frontend/src/
+├── components/     # search, results, clusters, detail modal, export, history
+├── hooks/          # search lifecycle, theme, history, debounce
+├── lib/            # the single API client
+└── types/          # generated from OpenAPI + readable aliases
+
 backend/app/
 ├── api/            # thin routes + dependency wiring
 ├── core/           # text normalization, errors, logging, rate limiting, safe XML
@@ -828,5 +956,6 @@ Interactive docs at `/docs` when the server is running.
 **Enrichment** spaCy (SciSpacy-ready) · scikit-learn (Ward agglomerative)
 **Summarization** Mistral API via httpx · deterministic grounding check · SQLite cache
 **Export** BibTeX · RIS · APA 7th · Vancouver, validated against independent parsers
-**Testing** pytest · pytest-asyncio · respx · bibtexparser · rispy · ruff · mypy (strict)
-**Coming** React + TypeScript + Tailwind (Stage 6) · Docker Compose (Stage 7)
+**Frontend** React 19 · TypeScript (strict) · Tailwind · Vite · types generated from OpenAPI
+**Testing** pytest · pytest-asyncio · respx · bibtexparser · rispy · ruff · mypy (strict) · Playwright
+**Coming** Docker Compose (Stage 7)
