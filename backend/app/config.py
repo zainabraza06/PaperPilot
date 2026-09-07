@@ -34,8 +34,14 @@ class Settings(BaseSettings):
     # --- shared HTTP behaviour ------------------------------------------
     http_timeout_seconds: float = 15.0
     source_timeout_seconds: float = Field(
-        default=20.0,
-        description="Wall-clock budget for one source's entire search, retries included.",
+        default=12.0,
+        description=(
+            "Wall-clock budget for one source's entire search, retries included. "
+            "A hung source costs the user exactly this much, since the fan-out can "
+            "only return once its slowest branch resolves. Measured floor: PubMed's "
+            "two-call esearch/efetch pattern has been seen to take 10.7s, so this "
+            "cannot go much lower without cutting off a healthy source."
+        ),
     )
     http_max_retries: int = 2
     user_agent: str = Field(
