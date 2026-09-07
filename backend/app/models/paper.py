@@ -12,9 +12,10 @@ import hashlib
 from datetime import date
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from app.core.text import normalize_doi, normalize_title
+from app.models.base import ApiModel
 from app.models.entities import Entity
 from app.models.summary import Summary
 
@@ -27,7 +28,7 @@ class SourceName(str, Enum):
     CROSSREF = "crossref"
 
 
-class RelevanceScore(BaseModel):
+class RelevanceScore(ApiModel):
     """Why a paper ranked where it did.
 
     The components are kept alongside the combined score, not discarded,
@@ -43,7 +44,7 @@ class RelevanceScore(BaseModel):
     strategy: str = Field(description="Fusion strategy that produced `combined`.")
 
 
-class Author(BaseModel):
+class Author(ApiModel):
     """A paper author.
 
     ``given``/``family`` are kept separate whenever the source provides them
@@ -88,7 +89,7 @@ class Author(BaseModel):
         )
 
 
-class Paper(BaseModel):
+class Paper(ApiModel):
     """A single scientific work, normalized across all sources.
 
     Optionality is deliberate and pervasive: real-world records routinely

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import Field
+
+from app.models.base import ApiModel
 
 
-class TopicCluster(BaseModel):
+class TopicCluster(ApiModel):
     """One sub-topic within a result set.
 
     ``terms`` is what makes this usable in a UI: a cluster identified only
@@ -23,7 +25,7 @@ class TopicCluster(BaseModel):
         return len(self.paper_ids)
 
 
-class ClusteringReport(BaseModel):
+class ClusteringReport(ApiModel):
     """Whether clustering ran, and how it went.
 
     Mirrors ``RankingReport``: an enrichment that did not happen is a state

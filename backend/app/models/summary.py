@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import ConfigDict, Field
+
+from app.models.base import ApiModel
 
 
 class GroundingStatus(str, Enum):
@@ -50,10 +52,10 @@ class IssueKind(str, Enum):
     FORMAT = "format"
 
 
-class GroundingIssue(BaseModel):
+class GroundingIssue(ApiModel):
     """One specific, located reason a summary was not accepted."""
 
-    model_config = {"frozen": True}
+    model_config = ConfigDict(frozen=True)
 
     kind: IssueKind
     detail: str = Field(description="Human-readable explanation, safe to show a user.")
@@ -62,7 +64,7 @@ class GroundingIssue(BaseModel):
     )
 
 
-class GroundingVerdict(BaseModel):
+class GroundingVerdict(ApiModel):
     """The full result of checking one summary against one abstract."""
 
     status: GroundingStatus
@@ -87,7 +89,7 @@ class SummaryOrigin(str, Enum):
     EXTRACTIVE = "extractive"
 
 
-class Summary(BaseModel):
+class Summary(ApiModel):
     """A paper summary, its provenance, and its grounding verdict."""
 
     text: str
@@ -113,7 +115,7 @@ class Summary(BaseModel):
         return self.origin is not SummaryOrigin.EXTRACTIVE
 
 
-class SummaryReport(BaseModel):
+class SummaryReport(ApiModel):
     """Per-search summarization diagnostics.
 
     Mirrors the source, ranking and clustering reports: a stage that

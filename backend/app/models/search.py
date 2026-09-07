@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from app.models.base import ApiModel
 from app.models.clusters import ClusteringReport, TopicCluster
 from app.models.paper import Paper, SourceName
 from app.models.summary import SummaryReport
@@ -35,7 +36,7 @@ class IdentifierKind(str, Enum):
     PMID = "pmid"
 
 
-class ParsedQuery(BaseModel):
+class ParsedQuery(ApiModel):
     """The user's raw input, interpreted.
 
     ``search_terms`` is what actually gets sent to the upstream APIs: for a
@@ -56,7 +57,7 @@ class ParsedQuery(BaseModel):
         return self.intent is QueryIntent.IDENTIFIER
 
 
-class SourceQuery(BaseModel):
+class SourceQuery(ApiModel):
     """A single connector's view of a search request."""
 
     parsed: ParsedQuery
@@ -88,7 +89,7 @@ class SourceStatus(str, Enum):
         return self not in (SourceStatus.OK, SourceStatus.EMPTY, SourceStatus.SKIPPED)
 
 
-class SourceReport(BaseModel):
+class SourceReport(ApiModel):
     """Per-source diagnostics returned alongside every search."""
 
     source: SourceName
@@ -98,7 +99,7 @@ class SourceReport(BaseModel):
     message: str | None = None
 
 
-class SourceResult(BaseModel):
+class SourceResult(ApiModel):
     """What a connector hands back to the search service."""
 
     source: SourceName
@@ -117,7 +118,7 @@ class SourceResult(BaseModel):
         )
 
 
-class EnrichmentReport(BaseModel):
+class EnrichmentReport(ApiModel):
     """Whether entity extraction ran, and with what model.
 
     Same contract as the ranking and clustering reports: the frontend
@@ -131,7 +132,7 @@ class EnrichmentReport(BaseModel):
     reason: str | None = None
 
 
-class RankingReport(BaseModel):
+class RankingReport(ApiModel):
     """Whether relevance ranking ran, and with what.
 
     Reported for the same reason source failures are: the frontend needs to
@@ -146,7 +147,7 @@ class RankingReport(BaseModel):
     reason: str | None = Field(default=None, description="Why ranking did not run.")
 
 
-class SearchRequest(BaseModel):
+class SearchRequest(ApiModel):
     """Inbound search parameters."""
 
     query: str = Field(min_length=1, max_length=8000)
@@ -157,7 +158,7 @@ class SearchRequest(BaseModel):
     )
 
 
-class SearchResponse(BaseModel):
+class SearchResponse(ApiModel):
     """Merged, deduplicated results plus the provenance of the fan-out."""
 
     query: ParsedQuery

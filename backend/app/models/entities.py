@@ -14,7 +14,9 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import ConfigDict, Field
+
+from app.models.base import ApiModel
 
 
 class EntityLabel(str, Enum):
@@ -62,17 +64,17 @@ _SCIENTIFIC_LABELS = frozenset(
 EntityField = Literal["title", "abstract"]
 
 
-class EntitySpan(BaseModel):
+class EntitySpan(ApiModel):
     """One occurrence of an entity, as character offsets into a field."""
 
-    model_config = {"frozen": True}
+    model_config = ConfigDict(frozen=True)
 
     field: EntityField
     start: int = Field(ge=0)
     end: int = Field(ge=0)
 
 
-class Entity(BaseModel):
+class Entity(ApiModel):
     """A distinct entity mentioned in a paper, with all its occurrences."""
 
     text: str = Field(description="Surface form, as it appears in the text.")
