@@ -1,0 +1,15 @@
+# The venv is host-specific and would be several hundred MB of dead weight.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets never enter the build context.
+.env
+
+# Runtime state belongs in a volume, not baked into the image.
+data/
+
+tests/
