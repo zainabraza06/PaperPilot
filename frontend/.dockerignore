@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env.*
+
+# The capture harness is a development tool; it needs a browser and two
+# running servers, neither of which exists at build time.
+scripts/
