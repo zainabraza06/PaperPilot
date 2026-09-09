@@ -1,0 +1,63 @@
+# PaperPilot, whole stack.
+#
+#   docker compose up --build      → http://localhost:5173
+#
+# Runs with no configuration at all. Every optional key raises a limit or
+# switches on a better model; none of them is required, and the app says
+# which parts are degraded rather than failing.
+
+services:
+  backend:
+    build:
+      context: ./backend
+    image: paperpilot-backend
+    environment:
+      # --- identification. All three APIs ask callers to identify
+      # themselves, and NCBI and Crossref both serve identified traffic
+      # from a faster pool.
+      PAPERPILOT_USER_AGENT: ${PAPERPILOT_USER_AGENT:-PaperPilot/0.1 (docker)}
+      PAPERPILOT_CROSSREF_MAILTO: ${PAPERPILOT_CROSSREF_MAILTO:-}
+      PAPERPILOT_PUBMED_API_KEY: ${PAPERPILOT_PUBMED_API_KEY:-}
+      PAPERPILOT_PUBMED_EMAIL: ${PAPERPILOT_PUBMED_EMAIL:-}
+
+      # --- summarization. Without a key, summaries fall back to
+      # extractive sentences taken verbatim from the abstract and are
+      # labelled as such, so the feature still demonstrates itself.
+      PAPERPILOT_LLM_PROVIDER: ${PAPERPILOT_LLM_PROVIDER:-mistral}
+      PAPERPILOT_MISTRAL_API_KEY: ${PAPERPILOT_MISTRAL_API_KEY:-}
+      PAPERPILOT_SUMMARY_MODEL: ${PAPERPILOT_SUMMARY_MODEL:-ministral-8b-latest}
+
+      PAPERPILOT_LOG_LEVEL: ${PAPERPILOT_LOG_LEVEL:-INFO}
+      PAPERPILOT_ENVIRONMENT: docker
+
+      # Both SQLite files live on the named volume below.
+      PAPERPILOT_SUMMARY_CACHE_PATH: /app/data/paperpilot.db
+      PAPERPILOT_PAPER_STORE_PATH: /app/data/paperpilot.db
+    volumes:
+      # Summaries cost API calls and, with a key set, money. Losing them on
+      # every rebuild would make the cache pointless.
+      - paperpilot-data:/app/data
+    # Not published to the host by default: the frontend proxies to it over
+    # the compose network, so nothing needs to reach it directly. Uncomment
+    # to poke at /docs.
+    # ports:
+    #   - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    image: paperpilot-frontend
+    ports:
+      # 5173 to match the Vite dev port, so the URL is the same either way.
+      - "${PAPERPILOT_PORT:-5173}:80"
+    depends_on:
+      backend:
+        # Waiting for healthy, not just started: the backend loads the
+        # embedding model during startup, and a frontend that comes up
+        # first would proxy into a connection refused.
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  paperpilot-data:
