@@ -3,11 +3,11 @@
 AI-powered scientific literature search across **PubMed**, **arXiv** and **Crossref** —
 one query, one ranked list, AI summaries, one-click citation export.
 
-> **Status: Stages 1–6 complete — multi-source retrieval, hybrid ranking with
-> measured Recall@k / NDCG@k, NER + topic clustering, grounded AI summarization
-> with a measured fact-checking layer, spec-correct citation export, and a
-> React frontend verified end to end in a real browser.**
-> Packaging (Stage 7) is in progress.
+> **Status: all seven stages complete.** Multi-source retrieval, hybrid
+> ranking with measured Recall@k / NDCG@k, NER and topic clustering,
+> grounded summarization with a measured fact-checking layer, spec-correct
+> citation export, a React frontend verified by driving a real browser, and
+> Docker packaging.
 
 ---
 
@@ -38,45 +38,186 @@ PaperPilot collapses that into one query, one ranked and deduplicated list.
 
 ---
 
+## Quickstart
+
+### Docker (everything, one command)
+
+```bash
+docker compose up --build
+# → http://localhost:5173
+```
+
+Runs with **no configuration at all**. The first build takes a few minutes:
+the embedding model and the spaCy pipeline are baked into the image rather
+than downloaded on first request, so the container starts offline and no
+user pays for a download.
+
+Every setting below is optional. Each one raises a limit or switches on a
+better model, and the app reports which parts are degraded instead of
+failing:
+
+```bash
+# .env, next to docker-compose.yml
+PAPERPILOT_MISTRAL_API_KEY=      # AI summaries; without it they are extractive
+PAPERPILOT_CROSSREF_MAILTO=      # puts Crossref calls in the faster polite pool
+PAPERPILOT_PUBMED_API_KEY=       # raises NCBI from 3 to 10 requests/second
+```
+
+### Local development
+
+Two terminals. The backend needs Python 3.12+, the frontend Node 20+.
+
+```bash
+# backend
+cd backend
+python -m venv .venv && .venv/Scripts/activate   # source .venv/bin/activate on macOS/Linux
+pip install -r requirements-dev.txt
+python -m spacy download en_core_web_sm
+uvicorn app.main:app --reload                    # → http://127.0.0.1:8000/docs
+```
+
+```bash
+# frontend
+cd frontend
+npm install
+npm run dev                                      # → http://127.0.0.1:5173
+```
+
+If something already owns port 8000, point the dev proxy elsewhere rather
+than editing a tracked file:
+
+```bash
+VITE_API_PROXY=http://127.0.0.1:8010 npm run dev
+```
+
+### Without the frontend
+
+Every stage is exercisable from the command line, which is the fastest way
+to see what the pipeline actually decides:
+
+```bash
+cd backend
+python -m scripts.demo_search "CRISPR prime editing efficiency in human cells"
+python -m scripts.demo_search "10.1038/s41586-019-1711-4"        # DOI lookup
+python -m scripts.demo_search "prime editing" --export ris       # citations
+python -m scripts.demo_search "diffusion models" --no-rank       # A/B the ranker
+
+python -m scripts.evaluate_ranking --per-query --sweep-alpha --clusters
+python -m scripts.evaluate_grounding
+python -m scripts.evaluate_summaries --limit 20                  # needs a key
+```
+
+Regenerating the frontend's types after a backend model change:
+
+```bash
+cd backend && python -m scripts.dump_openapi
+cd ../frontend && npx openapi-typescript openapi.json -o src/types/api.ts
+```
+
+---
+
+## Architecture
+
+```
+                        ┌──────────────────────────┐
+   query ──────────────▶│      query_parser        │  topic / keyword /
+                        │  intent classification   │  identifier / abstract
+                        └────────────┬─────────────┘
+                                     ▼
+                        ┌──────────────────────────┐
+                        │      SearchService       │  concurrent fan-out,
+                        │   (per-source timeout)   │  per-source status
+                        └────────────┬─────────────┘
+              ┌──────────────────────┼──────────────────────┐
+              ▼                      ▼                      ▼
+      ┌───────────────┐      ┌───────────────┐      ┌───────────────┐
+      │  PubMedSource │      │  ArxivSource  │      │ CrossrefSource│
+      │  MEDLINE XML  │      │   Atom feed   │      │     JSON      │
+      └───────┬───────┘      └───────┬───────┘      └───────┬───────┘
+              └──────────────────────┼──────────────────────┘
+                                     ▼
+                        ┌──────────────────────────┐
+                        │        deduplicate       │  DOI match, then
+                        │   (field-wise merge)     │  fuzzy title match
+                        └────────────┬─────────────┘
+                                     ▼
+                        ┌──────────────────────────┐
+                        │       HybridRanker       │  embeddings + BM25,
+                        │   (fusion strategies)    │  fused and scored
+                        └────────────┬─────────────┘
+                                     ▼
+              ┌──────────────────────┴──────────────────────┐
+              ▼                                             ▼
+      ┌───────────────────┐  ┌──────────────────┐  ┌───────────────────────┐
+      │  EntityExtractor  │  │ PaperSummarizer  │  │    TopicClusterer     │
+      │  (spaCy + rules)  │  │ generate → check │  │  (ward + c-TF-IDF)    │
+      │                   │  │ → correct → fall │  │                       │
+      └─────────┬─────────┘  └────────┬─────────┘  └───────────┬───────────┘
+                └─────────────────────┼────────────────────────┘
+                                      ▼
+        ranked Paper[] + scores + entities + clusters + grounded summaries
+                                      │
+                                      ▼
+                        ┌──────────────────────────┐
+                        │        PaperStore        │  SQLite, so a selection
+                        │   (id → enriched Paper)  │  can be cited later
+                        └────────────┬─────────────┘
+                                     ▼
+                       BibTeX · RIS · APA · Vancouver
+```
+
+The embedder is shared between the ranker and the clusterer behind an LRU cache, so
+a result set is embedded once per search rather than twice.
+
+Every connector implements one interface:
+
+```python
+class PaperSource(abc.ABC):
+    name: SourceName
+    display_name: str
+
+    async def search(self, query: SourceQuery) -> list[Paper]: ...
+    async def fetch_by_doi(self, doi: str) -> Paper | None: ...
+```
+
+Adding a fourth provider (OpenAlex, Semantic Scholar) is a new file in
+`app/sources/` plus one line in `app/sources/registry.py`. Nothing else in the
+codebase names a concrete connector.
+
+### Layout
+
+```
+frontend/src/
+├── components/     # search, results, clusters, detail modal, export, history
+├── hooks/          # search lifecycle, theme, history, debounce
+├── lib/            # the single API client
+└── types/          # generated from OpenAPI + readable aliases
+
+backend/app/
+├── api/            # thin routes + dependency wiring
+├── core/           # text normalization, errors, logging, rate limiting, safe XML
+├── models/         # Paper, Author, and the search request/response contract
+├── services/       # query parsing, deduplication, search orchestration
+│   ├── enrichment/ # NER (spaCy + shape patterns) and topic clustering
+│   ├── export/     # BibTeX, RIS, APA and Vancouver formatters
+│   ├── ranking/    # document view, embeddings, cache, BM25, fusion, IR metrics
+│   └── summarization/  # providers, prompts, grounding check, extractive fallback
+├── storage/        # SQLite summary cache and paper store
+└── sources/        # PaperSource interface + one module per provider
+
+backend/eval/       # golden set: queries, frozen candidate pool, judgments
+backend/scripts/    # demo_search, build_golden_set, evaluate_ranking
+```
+
+---
+
 ## Stage 1 — the retrieval layer
 
 One query fans out to three APIs concurrently, and the very different responses
 (MEDLINE XML, an Atom feed, and JSON) are normalized into a single `Paper` model,
 merged, and deduplicated.
 
-### Try it
-
-```bash
-cd backend
-python -m venv .venv
-.venv/Scripts/activate        # Windows;  source .venv/bin/activate on macOS/Linux
-pip install -r requirements-dev.txt
-
-# One real query against all three live APIs
-python -m scripts.demo_search "prime editing in primary human cells"
-
-# Compare ranking strategies on the golden set, and report clustering
-python -m scripts.evaluate_ranking --per-query --sweep-alpha --clusters
-
-# Measure the grounding check against 894 labelled cases
-python -m scripts.evaluate_grounding
-
-# Measure live generation (needs a Mistral key)
-python -m scripts.evaluate_summaries --limit 20
-
-# Or run the API
-uvicorn app.main:app --reload
-# → http://127.0.0.1:8000/docs
-```
-
-The first run downloads the embedding model (~90 MB) and needs a spaCy model
-(`python -m spacy download en_core_web_sm`). Both load once at startup, in a worker
-thread, so no search pays for them — and both degrade rather than fail if absent.
-
-No API keys or configuration are required. See [`backend/.env.example`](backend/.env.example)
-for the optional keys that raise rate limits.
-
-### What the demo shows
+### What the CLI demo shows
 
 ```
 QUERY      10.1038/s41586-019-1711-4
@@ -749,101 +890,6 @@ an architectural change, not a polish item, and it is not done.
 
 ---
 
-## Architecture
-
-```
-                        ┌──────────────────────────┐
-   query ──────────────▶│      query_parser        │  topic / keyword /
-                        │  intent classification   │  identifier / abstract
-                        └────────────┬─────────────┘
-                                     ▼
-                        ┌──────────────────────────┐
-                        │      SearchService       │  concurrent fan-out,
-                        │   (per-source timeout)   │  per-source status
-                        └────────────┬─────────────┘
-              ┌──────────────────────┼──────────────────────┐
-              ▼                      ▼                      ▼
-      ┌───────────────┐      ┌───────────────┐      ┌───────────────┐
-      │  PubMedSource │      │  ArxivSource  │      │ CrossrefSource│
-      │  MEDLINE XML  │      │   Atom feed   │      │     JSON      │
-      └───────┬───────┘      └───────┬───────┘      └───────┬───────┘
-              └──────────────────────┼──────────────────────┘
-                                     ▼
-                        ┌──────────────────────────┐
-                        │        deduplicate       │  DOI match, then
-                        │   (field-wise merge)     │  fuzzy title match
-                        └────────────┬─────────────┘
-                                     ▼
-                        ┌──────────────────────────┐
-                        │       HybridRanker       │  embeddings + BM25,
-                        │   (fusion strategies)    │  fused and scored
-                        └────────────┬─────────────┘
-                                     ▼
-              ┌──────────────────────┴──────────────────────┐
-              ▼                                             ▼
-      ┌───────────────────┐  ┌──────────────────┐  ┌───────────────────────┐
-      │  EntityExtractor  │  │ PaperSummarizer  │  │    TopicClusterer     │
-      │  (spaCy + rules)  │  │ generate → check │  │  (ward + c-TF-IDF)    │
-      │                   │  │ → correct → fall │  │                       │
-      └─────────┬─────────┘  └────────┬─────────┘  └───────────┬───────────┘
-                └─────────────────────┼────────────────────────┘
-                                      ▼
-        ranked Paper[] + scores + entities + clusters + grounded summaries
-                                      │
-                                      ▼
-                        ┌──────────────────────────┐
-                        │        PaperStore        │  SQLite, so a selection
-                        │   (id → enriched Paper)  │  can be cited later
-                        └────────────┬─────────────┘
-                                     ▼
-                       BibTeX · RIS · APA · Vancouver
-```
-
-The embedder is shared between the ranker and the clusterer behind an LRU cache, so
-a result set is embedded once per search rather than twice.
-
-Every connector implements one interface:
-
-```python
-class PaperSource(abc.ABC):
-    name: SourceName
-    display_name: str
-
-    async def search(self, query: SourceQuery) -> list[Paper]: ...
-    async def fetch_by_doi(self, doi: str) -> Paper | None: ...
-```
-
-Adding a fourth provider (OpenAlex, Semantic Scholar) is a new file in
-`app/sources/` plus one line in `app/sources/registry.py`. Nothing else in the
-codebase names a concrete connector.
-
-### Layout
-
-```
-frontend/src/
-├── components/     # search, results, clusters, detail modal, export, history
-├── hooks/          # search lifecycle, theme, history, debounce
-├── lib/            # the single API client
-└── types/          # generated from OpenAPI + readable aliases
-
-backend/app/
-├── api/            # thin routes + dependency wiring
-├── core/           # text normalization, errors, logging, rate limiting, safe XML
-├── models/         # Paper, Author, and the search request/response contract
-├── services/       # query parsing, deduplication, search orchestration
-│   ├── enrichment/ # NER (spaCy + shape patterns) and topic clustering
-│   ├── export/     # BibTeX, RIS, APA and Vancouver formatters
-│   ├── ranking/    # document view, embeddings, cache, BM25, fusion, IR metrics
-│   └── summarization/  # providers, prompts, grounding check, extractive fallback
-├── storage/        # SQLite summary cache and paper store
-└── sources/        # PaperSource interface + one module per provider
-
-backend/eval/       # golden set: queries, frozen candidate pool, judgments
-backend/scripts/    # demo_search, build_golden_set, evaluate_ranking
-```
-
----
-
 ## Real-world quirks the connectors handle
 
 These are the things that break a naive implementation, and each one is pinned by a test.
@@ -890,6 +936,81 @@ Merging is **field-wise, not winner-takes-all**: the most complete record keeps 
 identity, and every field it lacks is filled from a sibling. That is how a Crossref
 record with no abstract ends up carrying the arXiv abstract — which is exactly what
 Stage 2's ranking needs.
+
+---
+
+## Packaging
+
+`docker compose up --build` brings up the whole stack on
+<http://localhost:5173> with no configuration.
+
+### Two decisions that dominate the backend image
+
+**CPU-only torch.** `sentence-transformers` pulls in PyTorch, and the
+default wheel carries CUDA libraries this service will never touch —
+nothing here uses a GPU. Installing from PyTorch's CPU index instead
+downloads a **174 MB** wheel rather than roughly 2.5 GB.
+
+**Models baked in at build time.** The embedding model (~90 MB) and the
+spaCy pipeline (~12 MB) are downloaded during the build, not on first
+request. Otherwise the first search after every deploy pays for a
+download, and the container cannot start at all without reaching Hugging
+Face — a bad property for something meant to be reproducible.
+
+The frontend runtime image contains no Node at all: the build stage emits
+static files and nginx serves them.
+
+| image | size | compressed |
+|---|---|---|
+| `paperpilot-frontend` | 74 MB | 21 MB |
+| `paperpilot-backend` | dominated by torch + models | — |
+
+`npm run build` runs `tsc -b` first, so a type error fails the image build
+rather than shipping.
+
+### nginx, and why the app is same-origin in both environments
+
+The frontend container proxies `/api` and `/health` to the backend over
+the compose network, exactly as the Vite dev server proxies them in
+development. CORS is therefore not load-bearing in either environment —
+it is configured, but nothing depends on it being right to work locally.
+
+Verified against a running container rather than by reading the config:
+
+- SPA served, and a deep link falls back to `index.html` rather than a
+  404 from nginx
+- `/api` and `/health` proxied through to the backend
+- `index.html` is `no-cache`; fingerprinted assets are
+  `public, max-age=31536000, immutable`
+- gzip negotiated on the JS bundle
+
+That check caught a real bug: `expires 1y` **plus** `add_header
+Cache-Control` emits *two* `Cache-Control` headers, and which one a cache
+honours is up to the cache. It is one directive now.
+
+The full browser suite in
+[`frontend/scripts/capture.mjs`](frontend/scripts/capture.mjs) also runs
+against the containerized production build, not just the dev server.
+
+### What is not verified here
+
+The backend image was **not built to completion on this machine.** The
+build is correct as far as it ran — apt, the venv, and CPU-only torch
+resolving to the right wheel — but downloads on this network measured
+**~57 KB/s**, which puts the torch wheel alone at roughly 50 minutes and
+the full dependency set well beyond that. The Dockerfile now sets
+`PIP_RETRIES` and `PIP_DEFAULT_TIMEOUT` so a slow link retries rather than
+failing a build twenty minutes in, but the finished image size is unmeasured
+and the compose stack has not been exercised end to end. Treat the
+frontend image and the nginx configuration as verified and the backend
+image as reviewed but unbuilt.
+
+### Recording a demo
+
+[`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) is a shot-by-shot script for a
+4–5 minute screen recording: what to show, in what order, what to say over
+the loading state, and — the part that matters — which numbers not to
+overclaim.
 
 ---
 
@@ -958,4 +1079,4 @@ Interactive docs at `/docs` when the server is running.
 **Export** BibTeX · RIS · APA 7th · Vancouver, validated against independent parsers
 **Frontend** React 19 · TypeScript (strict) · Tailwind · Vite · types generated from OpenAPI
 **Testing** pytest · pytest-asyncio · respx · bibtexparser · rispy · ruff · mypy (strict) · Playwright
-**Coming** Docker Compose (Stage 7)
+**Packaging** Docker · docker compose · nginx
