@@ -92,9 +92,9 @@
       "grade": 1,
       "title": "CRISPR Editing of Human iPS cells with RNPs using Nucleofection v1"
     },
-    "doi:10.1242/prelights.30851": {
+    "doi:10.1016/bs.mie.2025.01.006": {
       "grade": 2,
-      "title": "Saturation variant interpretation using CRISPR prime editing"
+      "title": "Using Prime Editing Guide Generator (PEGG) for high-throughput generation of prime editing sensor libraries"
     }
   },
   "transformer-attention": {
@@ -186,9 +186,9 @@
       "grade": 1,
       "title": "Transformer Architecture and Attention Mechanisms in Genome Data Analysis: A Comprehensive Review."
     },
-    "doi:10.5220/0012014800003633": {
-      "grade": 0,
-      "title": "Combining Transformer and Reverse Attention Mechanism for Polyp Segmentation"
+    "doi:10.1201/9781003650065-4": {
+      "grade": 3,
+      "title": "Attention Mechanism and Pretrained Language Models"
     }
   },
   "gnn-molecular": {
@@ -223,10 +223,6 @@
     "doi:10.1109/jbhi.2024.3464674": {
       "grade": 3,
       "title": "Contrastive Dual-Interaction Graph Neural Network for Molecular Property Prediction"
-    },
-    "doi:10.1093/bioinformatics/btae574": {
-      "grade": 3,
-      "title": "Chain-aware graph neural networks for molecular property prediction."
     },
     "doi:10.1039/bk9781837670178-00159": {
       "grade": 3,
@@ -283,6 +279,10 @@
     "doi:10.1021/acs.jcim.6c02021": {
       "grade": 3,
       "title": "MMGNN: Multilevel, Multicolor Graph Neural Networks for Molecular Property Prediction"
+    },
+    "doi:10.1016/j.jpha.2025.101242": {
+      "grade": 3,
+      "title": "Fingerprint-enhanced hierarchical molecular graph neural networks for property prediction."
     }
   },
   "scrna-batch-effect": {
@@ -346,13 +346,13 @@
       "grade": 3,
       "title": "FedscGen: privacy-preserving federated batch effect correction of single-cell RNA sequencing data"
     },
-    "doi:10.1093/bib/bbaa248": {
-      "grade": 3,
-      "title": "Sequencing dropout-and-batch effect normalization for single-cell mRNA profiles: a survey and comparative analysis."
-    },
     "doi:10.64898/2025.12.04.692478": {
       "grade": 3,
       "title": "COBRA: Cell-type-specific Orthogonal Batch effect Removal Algorithm in single cell RNA-sequencing data"
+    },
+    "doi:10.1186/s12943-025-02548-8": {
+      "grade": 0,
+      "title": "A pan-cancer single cell landscape reveals heterogeneity and functional diversity of double-negative T cells."
     }
   },
   "diffusion-image": {
@@ -440,10 +440,6 @@
       "grade": 3,
       "title": "Conditional Image Synthesis Using Generative Diffusion Models: Application to Pathological Prostate MR Image Generation"
     },
-    "doi:10.1002/mp.17328": {
-      "grade": 2,
-      "title": "CBCT-based synthetic CT image generation using a diffusion model for CBCT-guided lung radiotherapy."
-    },
     "arxiv:291fa759f2f097cd": {
       "grade": 3,
       "title": "Diffusion Models Generate Images Like Painters: an Analytical Theory of Outline First, Details Later"
@@ -451,6 +447,10 @@
     "doi:10.5220/0014635000004084": {
       "grade": 3,
       "title": "Synthetic Aerial Image Generation with Controllable Diffusion Models for Pinus Segmentation under Data Scarcity"
+    },
+    "doi:10.1371/journal.pone.0331450": {
+      "grade": 1,
+      "title": "MG-DIFF: A novel molecular graph diffusion model for molecular generation and optimization."
     }
   },
   "sars-cov2-antibody": {
@@ -469,10 +469,6 @@
     "arxiv:40850b1b4b4fee87": {
       "grade": 1,
       "title": "Deciphering the Protein Motion of S1 Subunit in SARS-CoV-2 Spike Glycoprotein Through Integrated Computational Methods"
-    },
-    "doi:10.1016/j.cell.2023.02.001": {
-      "grade": 2,
-      "title": "A pseudovirus system enables deep mutational scanning of the full SARS-CoV-2 spike."
     },
     "arxiv:f67411c82ebb6d53": {
       "grade": 1,
@@ -537,6 +533,10 @@
     "doi:10.1101/2020.04.17.046185": {
       "grade": 1,
       "title": "Protein structure analysis of the interactions between SARS-CoV-2 spike protein and the human ACE2 receptor: from conformational changes to novel neutralizing antibodies"
+    },
+    "doi:10.1038/s41586-020-2548-6": {
+      "grade": 3,
+      "title": "Potently neutralizing and protective human antibodies against SARS-CoV-2."
     }
   },
   "protein-folding": {
@@ -608,10 +608,6 @@
       "grade": 1,
       "title": "Incorporating Surfaced-Induced Dissociation Mass Spectrometry Data into an AlphaFold-derived deep learning network improves protein structure prediction"
     },
-    "doi:10.1038/s41586-019-1923-7": {
-      "grade": 3,
-      "title": "Improved protein structure prediction using potentials from deep learning."
-    },
     "arxiv:b37b57b9ec374050": {
       "grade": 1,
       "title": "Characterizing the Conformational States of G Protein Coupled Receptors Generated with AlphaFold"
@@ -627,6 +623,10 @@
     "doi:10.31033/abjar/5.3.2026.122": {
       "grade": 3,
       "title": "Deep Learning for Protein Structure Prediction: From AlphaFold to the Next Frontier"
+    },
+    "doi:10.1038/s42003-023-05610-7": {
+      "grade": 3,
+      "title": "Multi-domain and complex protein structure prediction using inter-domain interactions from deep learning."
     }
   },
   "abstract-snippet": {
@@ -709,6 +709,978 @@
     "arxiv:7a9251f7bc29bd4b": {
       "grade": 2,
       "title": "SpCAST enables scalable and interpretable integration of single-cell RNA sequencing and single-cell-resolved spatial transcriptomics"
+    }
+  },
+  "gut-microbiome-obesity": {
+    "doi:10.1007/s00018-015-2061-5": {
+      "grade": 3,
+      "title": "Gut microbiota and obesity."
+    },
+    "arxiv:9f0bad7479be0955": {
+      "grade": 1,
+      "title": "Gut microbiome composition: back to baseline?"
+    },
+    "doi:10.1007/978-3-030-59642-2_5": {
+      "grade": 3,
+      "title": "Gut Microbiome, Diabetes, and Obesity: Complex Interplay of Physiology"
+    },
+    "doi:10.3390/nu11112690": {
+      "grade": 3,
+      "title": "Gut Microbiota and Obesity: A Role for Probiotics."
+    },
+    "arxiv:dd0d035ec4a46381": {
+      "grade": 0,
+      "title": "Upcycling Human Excrement: The Gut Microbiome to Soil Microbiome Axis"
+    },
+    "doi:10.1016/b978-0-323-91313-3.00015-5": {
+      "grade": 3,
+      "title": "Role of gut microbiome in obesity"
+    },
+    "doi:10.1136/gutjnl-2018-316723": {
+      "grade": 1,
+      "title": "Human gut microbiome: hopes, threats and promises."
+    },
+    "doi:10.1371/journal.pcbi.1007524": {
+      "grade": 1,
+      "title": "Evidence for a multi-level trophic organization of the human gut microbiome"
+    },
+    "doi:10.7551/mitpress/11291.003.0011": {
+      "grade": 3,
+      "title": "The Microbiome and Obesity"
+    },
+    "doi:10.3389/fendo.2024.1333778": {
+      "grade": 3,
+      "title": "Gut microbiota and therapy for obesity and type 2 diabetes."
+    },
+    "doi:10.1038/s44220-023-00148-3": {
+      "grade": 1,
+      "title": "Bugs as Features (Part I): Concepts and Foundations for the Compositional Data Analysis of the Microbiome-Gut-Brain Axis"
+    },
+    "doi:10.1007/978-3-030-59642-2_6": {
+      "grade": 3,
+      "title": "Gut Microbiota in Obesity and Bariatric Surgery: Where Do We Stand?"
+    },
+    "doi:10.3390/nu15102236": {
+      "grade": 3,
+      "title": "Obesity, Gut Microbiota, and Metabolome: From Pathophysiology to Nutritional Interventions."
+    },
+    "doi:10.3390/e23020230": {
+      "grade": 0,
+      "title": "Aggregating Knockoffs for False Discovery Rate Control with an Application to Gut Microbiome Data"
+    },
+    "doi:10.1007/978-3-319-90545-7_2": {
+      "grade": 2,
+      "title": "Composition and Function of the Gut Microbiome"
+    },
+    "doi:10.1136/gutjnl-2020-323071": {
+      "grade": 2,
+      "title": "Gut microbiota-derived metabolites as central regulators in metabolic disorders."
+    },
+    "arxiv:b9a45c031c836701": {
+      "grade": 0,
+      "title": "Multivariate Log-Contrast Regression with Sub-Compositional Predictors: Testing the Association Between Preterm Infants' Gut Microbiome and Neurobehavioral Outcomes"
+    },
+    "doi:10.1016/j.gassur.2025.102255": {
+      "grade": 1,
+      "title": "Invited commentary on “Gut microbiome and metabolome profiling in obesity reveals an association between the effectiveness of sleeve gastrectomy and the composition and function of the gut microbiome”"
+    },
+    "doi:10.1038/s41591-019-0495-2": {
+      "grade": 3,
+      "title": "Supplementation with Akkermansia muciniphila in overweight and obese human volunteers: a proof-of-concept exploratory study."
+    },
+    "arxiv:e523bcc62bfee9f0": {
+      "grade": 0,
+      "title": "Log-Contrast Regression with Functional Compositional Predictors: Linking Preterm Infant's Gut Microbiome Trajectories to Neurobehavioral Outcome"
+    },
+    "doi:10.1093/cdn/nzab055_060": {
+      "grade": 3,
+      "title": "Composition of the Gut Microbiome in Adolescent Girls With Overweight and Obesity"
+    },
+    "doi:10.3390/ijms25179715": {
+      "grade": 2,
+      "title": "Insights into Gut Dysbiosis: Inflammatory Diseases, Obesity, and Restoration Approaches."
+    },
+    "arxiv:8095b6639d531552": {
+      "grade": 0,
+      "title": "Statistical Methods for Microbiome Analysis: A brief review"
+    },
+    "doi:10.26226/morressier.619bdac3be545488cfae50fc": {
+      "grade": 3,
+      "title": "The role of gut microbiome in obesity: a systematic review"
+    }
+  },
+  "attention-efficient": {
+    "doi:10.1186/s12868-016-0283-6": {
+      "grade": 0,
+      "title": "25th Annual Computational Neuroscience Meeting: CNS-2016."
+    },
+    "arxiv:fb589d56592015a0": {
+      "grade": 3,
+      "title": "Short-Long Convolutions Help Hardware-Efficient Linear Attention to Focus on Long Sequences"
+    },
+    "doi:10.14711/thesis-b1155167": {
+      "grade": 0,
+      "title": "The linear complexity of sequences with desirable correlation"
+    },
+    "doi:10.1016/j.neunet.2025.107897": {
+      "grade": 0,
+      "title": "Enhancing intelligent transportation systems with a more efficient model for long-term traffic predictions based on an attention mechanism and a residual temporal convolutional network."
+    },
+    "arxiv:dfd8135bf84d9ee9": {
+      "grade": 3,
+      "title": "Scaling Attention to Very Long Sequences in Linear Time with Wavelet-Enhanced Random Spectral Attention (WERSA)"
+    },
+    "doi:10.3390/math10050794": {
+      "grade": 0,
+      "title": "An Efficient Algorithm to Compute the Linear Complexity of Binary Sequences"
+    },
+    "doi:10.1088/2057-1976/ad8acb": {
+      "grade": 1,
+      "title": "MCI Net: Mamba- Convolutional lightweight self-attention medical image segmentation network."
+    },
+    "arxiv:96188005e3c671a6": {
+      "grade": 3,
+      "title": "H-Transformer-1D: Fast One-Dimensional Hierarchical Attention for Sequences"
+    },
+    "doi:10.1016/b978-0-44-313517-0.00011-1": {
+      "grade": 0,
+      "title": "Linear complexity of sequences"
+    },
+    "doi:10.3389/fnbot.2023.1214203": {
+      "grade": 3,
+      "title": "A novel approach to attention mechanism using kernel functions: Kerformer."
+    },
+    "arxiv:4f7f1f69c6200585": {
+      "grade": 3,
+      "title": "ELASTIC: Efficient Linear Attention for Sequential Interest Compression"
+    },
+    "doi:10.1007/978-3-0348-7865-4_15": {
+      "grade": 0,
+      "title": "Linear Complexity and k-Error Linear Complexity for p n -Periodic Sequences"
+    },
+    "doi:10.1109/tpami.2023.3262578": {
+      "grade": 1,
+      "title": "Local-Global Context Aware Transformer for Language-Guided Video Segmentation."
+    },
+    "arxiv:7fe634a4b3ed63a7": {
+      "grade": 3,
+      "title": "LAWCAT: Efficient Distillation from Quadratic to Linear Attention with Convolution across Tokens for Long Context Modeling"
+    },
+    "doi:10.3390/app152011034": {
+      "grade": 1,
+      "title": "UNETR++ with Voxel-Focused Attention: Efficient 3D Medical Image Segmentation with Linear-Complexity Transformers"
+    },
+    "pubmed:5274a396d81258bb": {
+      "grade": 1,
+      "title": "IRIS: Interpretable Retrieval-Augmented Classification for Long Interspersed Document Sequences."
+    },
+    "doi:10.1145/3746027.3754825": {
+      "grade": 3,
+      "title": "ELFATT: Efficient Linear Fast Attention for Vision Transformers"
+    },
+    "doi:10.4028/www.scientific.net/amr.532-533.1726": {
+      "grade": 0,
+      "title": "An Efficient Algorithm for Computing the k-Error Linear Complexity Spectrum of Periodic Sequences"
+    },
+    "doi:10.1038/s41598-025-28885-8": {
+      "grade": 1,
+      "title": "UNet with self-adaptive Mamba-like attention and causal-resonance learning for medical image segmentation."
+    },
+    "arxiv:3363170d26d2c8a3": {
+      "grade": 3,
+      "title": "Degrees of Freedom for Linear Attention: Distilling Softmax Attention with Optimal Feature Efficiency"
+    },
+    "doi:10.1109/caibda70336.2026.11621553": {
+      "grade": 3,
+      "title": "Memory-Efficient Chunked Tropical Attention for Long Sequences"
+    },
+    "doi:10.1038/s41598-025-32639-x": {
+      "grade": 3,
+      "title": "Contextual priority attention enables linear time sequence modeling in transformers."
+    },
+    "arxiv:b30b6dbcb6d360dc": {
+      "grade": 3,
+      "title": "LISA: Linear-Indexed Sparse Attention for Efficient Long-Context Reasoning"
+    },
+    "doi:10.1007/s12095-008-0007-6": {
+      "grade": 0,
+      "title": "How to determine linear complexity and k-error linear complexity in some classes of linear recurring sequences"
+    }
+  },
+  "alzheimers-amyloid": {
+    "doi:10.15252/emmm.201606210": {
+      "grade": 3,
+      "title": "The amyloid hypothesis of Alzheimer's disease at 25 years."
+    },
+    "doi:10.1371/journal.pone.0182194": {
+      "grade": 2,
+      "title": "Changes in lipid membranes may trigger amyloid toxicity in Alzheimer's disease"
+    },
+    "doi:10.2147/ndt.s7460": {
+      "grade": 2,
+      "title": "Brain amyloid &amp;beta; protein and memory disruption in Alzheimer&amp;rsquo;s disease"
+    },
+    "doi:10.1126/science.1072994": {
+      "grade": 3,
+      "title": "The amyloid hypothesis of Alzheimer's disease: progress and problems on the road to therapeutics."
+    },
+    "arxiv:ab7bde746f56e696": {
+      "grade": 0,
+      "title": "How can methods for classifying and clustering trajectories be used for prevention trials? An example in Alzheimer's disease area"
+    },
+    "doi:10.1097/00002093-200307000-00006": {
+      "grade": 2,
+      "title": "Potential Role of Endogenous and Exogenous Amyloid-Beta Binding Molecules in the Pathogenesis, Diagnosis, and Treatment of Alzheimer Disease"
+    },
+    "doi:10.1038/s41392-023-01484-7": {
+      "grade": 3,
+      "title": "Amyloid β-based therapy for Alzheimer's disease: challenges, successes and future."
+    },
+    "doi:10.31979/etd.nz6j-vxkr": {
+      "grade": 1,
+      "title": "Identifying Potential Alzheimer�s Disease Biomarkers Beyond Amyloid-Beta and Tau"
+    },
+    "doi:10.3390/ijms241914499": {
+      "grade": 3,
+      "title": "Anti-Amyloid Therapies for Alzheimer's Disease and the Amyloid Cascade Hypothesis."
+    },
+    "doi:10.2174/9789811405136119030003": {
+      "grade": 3,
+      "title": "Amyloid Hypothesis in Alzheimer´s Disease"
+    },
+    "doi:10.3390/molecules27041210": {
+      "grade": 3,
+      "title": "Amyloidosis in Alzheimer's Disease: Pathogeny, Etiology, and Related Therapeutic Directions."
+    },
+    "doi:10.1097/00002093-199100510-00004": {
+      "grade": 2,
+      "title": "Hypothesis Regarding Amyloid and Zinc in the Pathogenesis of Alzheimer Disease: Potential for Preventive Intervention"
+    },
+    "doi:10.2174/1389450120666190806153206": {
+      "grade": 3,
+      "title": "Amyloid Beta Hypothesis in Alzheimer's Disease: Major Culprits and Recent Therapeutic Strategies."
+    },
+    "doi:10.1007/978-1-4615-8149-9_8": {
+      "grade": 3,
+      "title": "Beta Amyloid (Aβ) as a Therapeutic Target in Alzheimer’s Disease"
+    },
+    "doi:10.3881/j.issn.1000-503x.10875": {
+      "grade": 3,
+      "title": "[β Amyloid Hypothesis in Alzheimer's Disease:Pathogenesis,Prevention,and Management]"
+    },
+    "doi:10.2174/1389557013407098": {
+      "grade": 3,
+      "title": "beta-Amyloid Aggregation Inhibitors for the Treatment of Alzheimer Disease Dream or Reality?"
+    },
+    "doi:10.3389/fimmu.2023.1117172": {
+      "grade": 1,
+      "title": "The effects of microglia-associated neuroinflammation on Alzheimer's disease."
+    },
+    "doi:10.21276/apjhs.2019.6.1.23": {
+      "grade": 3,
+      "title": "How can immunotherapy be used to target Amyloid Beta for treating Alzheimer Disease"
+    }
+  },
+  "reinforcement-rlhf": {
+    "doi:10.1007/s10676-025-09837-2": {
+      "grade": 2,
+      "title": "Helpful, harmless, honest? Sociotechnical limits of AI alignment and safety through Reinforcement Learning from Human Feedback."
+    },
+    "arxiv:cfcb39dce4da3647": {
+      "grade": 3,
+      "title": "Alignment Tampering: How Reinforcement Learning from Human Feedback Is Exploited to Optimize Misaligned Biases"
+    },
+    "doi:10.36227/techrxiv.175877749.95952584/v1": {
+      "grade": 3,
+      "title": "Reinforcement Learning with Human Feedback (RLHF): Shaping the Future of AI Alignment Roadmap 2025-2035"
+    },
+    "doi:10.1038/s41598-024-70031-3": {
+      "grade": 2,
+      "title": "Strong and weak alignment of large language models with human values."
+    },
+    "arxiv:d86c4ac4e30c480c": {
+      "grade": 3,
+      "title": "Multi-Task Reward Learning from Human Ratings"
+    },
+    "doi:10.7753/ijcatr1506.1001": {
+      "grade": 3,
+      "title": "Reinforcement Learning from Human Feedback (RLHF) and Multimodal LLM Alignment: A Comprehensive Review"
+    },
+    "doi:10.1016/j.tics.2024.09.005": {
+      "grade": 0,
+      "title": "Demystifying unsupervised learning: how it helps and hurts."
+    },
+    "arxiv:ad7a84037979909f": {
+      "grade": 3,
+      "title": "Reinforcement Learning from Human Feedback with High-Confidence Safety Constraints"
+    },
+    "doi:10.52202/085713-4616": {
+      "grade": 3,
+      "title": "Explainable Reinforcement Learning from Human Feedback to Improve Alignment"
+    },
+    "doi:10.1007/s11604-025-01907-1": {
+      "grade": 1,
+      "title": "Artificial superintelligence alignment in healthcare."
+    },
+    "arxiv:d81c334940283be3": {
+      "grade": 1,
+      "title": "Conceptual Belief-Informed Reinforcement Learning"
+    },
+    "doi:10.63503/j.ijssic.2026.234": {
+      "grade": 3,
+      "title": "Reinforcement Learning from Human and AI Feedback for Large Language Model Alignment: A Review"
+    },
+    "doi:10.7554/elife.106073": {
+      "grade": 0,
+      "title": "Disinformation elicits learning biases."
+    },
+    "arxiv:f35a90faf53306b2": {
+      "grade": 3,
+      "title": "Online Iterative Reinforcement Learning from Human Feedback with General Preference Model"
+    },
+    "doi:10.2139/ssrn.6928698": {
+      "grade": 2,
+      "title": "Human Reinforcement Learning from AI Feedback: Feedback Mechanisms, Meta-Collaborative Monitoring, and Identity Positioning in Long-Term Human-AI Collaboration"
+    },
+    "doi:10.1136/jisakos-2020-000475": {
+      "grade": 0,
+      "title": "Feedback cues improve the alignment and technique of children performing ACL injury prevention exercises."
+    },
+    "arxiv:82bbfb1492116f33": {
+      "grade": 3,
+      "title": "HERO: Human-Feedback Efficient Reinforcement Learning for Online Diffusion Model Finetuning"
+    },
+    "doi:10.2139/ssrn.5806082": {
+      "grade": 3,
+      "title": "Efficient Reinforcement Learning from Human Feedback via Bayesian Preference Inference"
+    },
+    "doi:10.1016/j.neunet.2024.106848": {
+      "grade": 3,
+      "title": "Offline reward shaping with scaling human preference feedback for deep reinforcement learning."
+    },
+    "arxiv:ac2cc27406de4493": {
+      "grade": 3,
+      "title": "A Survey of Reinforcement Learning from Human Feedback"
+    },
+    "doi:10.2139/ssrn.6338238": {
+      "grade": 3,
+      "title": "The Role of Foundational Autoraters in Reinforcement Learning from Human Feedback (RLHF)&amp;nbsp;"
+    },
+    "doi:10.1038/s41598-026-54756-x": {
+      "grade": 2,
+      "title": "Reinforcement learning from human feedback improves automatic speech recognition models for ancient Thai language."
+    },
+    "arxiv:c5fab81bc75f44f7": {
+      "grade": 3,
+      "title": "Data-Centric Human Preference with Rationales for Direct Preference Alignment"
+    },
+    "doi:10.20944/preprints202503.1159.v1": {
+      "grade": 3,
+      "title": "Introduction to Reinforcement Learning from Human Feedback: A Review of Current Developments"
+    }
+  },
+  "crispr-off-target": {
+    "doi:10.1038/nbt.3117": {
+      "grade": 3,
+      "title": "GUIDE-seq enables genome-wide profiling of off-target cleavage by CRISPR-Cas nucleases."
+    },
+    "doi:10.1007/978-3-031-21753-1_41": {
+      "grade": 3,
+      "title": "Guide-Guard: Off-Target Predicting in CRISPR Applications"
+    },
+    "doi:10.1101/741322": {
+      "grade": 3,
+      "title": "CRISPR-Cas off-target detection using Oxford Nanopore sequencing - is the mitochondrial genome more vulnerable to off-targets?"
+    },
+    "doi:10.1038/nature16526": {
+      "grade": 3,
+      "title": "High-fidelity CRISPR-Cas9 nucleases with no detectable genome-wide off-target effects."
+    },
+    "arxiv:e676a4dab7753446": {
+      "grade": 3,
+      "title": "Artificial Intelligence for CRISPR Guide RNA Design: Explainable Models and Off-Target Safety"
+    },
+    "doi:10.1089/crispr.2022.0042": {
+      "grade": 2,
+      "title": "JACKIE: Fast Enumeration of Genome-Wide Single- and Multicopy CRISPR Target Sites and Their Off-Target Numbers"
+    },
+    "doi:10.1016/j.cell.2013.02.022": {
+      "grade": 1,
+      "title": "Repurposing CRISPR as an RNA-guided platform for sequence-specific control of gene expression."
+    },
+    "doi:10.1186/s13059-023-03113-6": {
+      "grade": 0,
+      "title": "CAGI, the Critical Assessment of Genome Interpretation, establishes progress and prospects for computational genetic variant interpretation methods"
+    },
+    "doi:10.1007/978-1-0716-0687-2_15": {
+      "grade": 3,
+      "title": "Genome-Wide CRISPR Off-Target DNA Break Detection by the BLISS Method"
+    },
+    "doi:10.1089/hum.2022.198": {
+      "grade": 3,
+      "title": "Advances in Off-Target Detection for CRISPR-Based Genome Editing."
+    },
+    "arxiv:4d25c72d2936ad5e": {
+      "grade": 3,
+      "title": "Comparative Analysis of Machine Learning Algorithms for Predicting On-Target and Off-Target Effects of CRISPR-Cas13d for gene editing"
+    },
+    "doi:10.1101/gr.236620.118": {
+      "grade": 3,
+      "title": "DIG-seq: a genome-wide CRISPR off-target profiling method using chromatin DNA"
+    },
+    "doi:10.1007/978-1-0716-2651-1_26": {
+      "grade": 3,
+      "title": "CRISPR Off-Target Analysis Platforms."
+    },
+    "arxiv:a26ab927fe0a06ea": {
+      "grade": 0,
+      "title": "Investigating the genomic background of CRISPR-Cas genomes for CRISPR-based antimicrobials"
+    },
+    "doi:10.1016/bs.pmbts.2021.01.012": {
+      "grade": 3,
+      "title": "Genome-wide detection and analysis of CRISPR-Cas off-targets"
+    },
+    "doi:10.1093/plphys/kiad347": {
+      "grade": 2,
+      "title": "Genome- and transcriptome-wide off-target analyses of a high-efficiency adenine base editor in tomato."
+    },
+    "arxiv:e0ff5f8c032847d2": {
+      "grade": 0,
+      "title": "Prokaryotic genome editing based on the subtype I-B-Svi CRISPR-Cas system"
+    },
+    "doi:10.1093/nar/gkaa930": {
+      "grade": 3,
+      "title": "Benchmarking and integrating genome-wide CRISPR off-target detection and prediction"
+    },
+    "doi:10.1038/s41587-024-02307-y": {
+      "grade": 3,
+      "title": "Tracking-seq reveals the heterogeneity of off-target effects in CRISPR-Cas9-mediated genome editing."
+    },
+    "arxiv:b57deb4f8ca019c2": {
+      "grade": 2,
+      "title": "DeepFM-Crispr: Prediction of CRISPR On-Target Effects via Deep Learning"
+    },
+    "doi:10.2527/jas2016.94supplement4177x": {
+      "grade": 1,
+      "title": "P7003 Heritable multiplex gene editing via CRISPR/Cas9 exhibits no detectable genome-wide off-target effects in sheep"
+    },
+    "doi:10.1038/nmeth.3284": {
+      "grade": 3,
+      "title": "Digenome-seq: genome-wide profiling of CRISPR-Cas9 off-target effects in human cells."
+    },
+    "doi:10.1038/srep36819": {
+      "grade": 0,
+      "title": "Unified theory of human genome reveals a constrained spatial chromosomal arrangement in interphase nuclei"
+    },
+    "doi:10.3389/fmicb.2022.966231": {
+      "grade": 0,
+      "title": "Genome editing in the edible fungus Poria cocos using CRISPR-Cas9 system integrating genome-wide off-target prediction and detection"
+    }
+  },
+  "quantum-error-correction": {
+    "doi:10.1038/s41586-024-08449-y": {
+      "grade": 3,
+      "title": "Quantum error correction below the surface code threshold"
+    },
+    "doi:10.22331/q-2023-09-26-1122": {
+      "grade": 2,
+      "title": "Quantum error correction with fractal topological codes"
+    },
+    "doi:10.1016/j.xinn.2025.100942": {
+      "grade": 2,
+      "title": "Google’s “Willow” quantum processor: New RCS record and first error correction below the surface code threshold"
+    },
+    "doi:10.1103/rqkg-dw31": {
+      "grade": 3,
+      "title": "Experimental Quantum Error Correction below the Surface Code Threshold via All-Microwave Leakage Suppression."
+    },
+    "doi:10.1103/physrevlett.109.160503": {
+      "grade": 3,
+      "title": "High threshold error correction for the surface code"
+    },
+    "doi:10.1017/9781009639651.030": {
+      "grade": 3,
+      "title": "Quantum error correction with the surface code"
+    },
+    "doi:10.1038/s41586-021-04273-w": {
+      "grade": 3,
+      "title": "Quantum logic with spin qubits crossing the surface code threshold."
+    },
+    "doi:10.22331/q-2025-10-13-1884": {
+      "grade": 2,
+      "title": "Quantum Error Correction resilient against Atom Loss"
+    },
+    "doi:10.21203/rs.3.rs-8897316/v1": {
+      "grade": 3,
+      "title": "Scalable simulation of surface-code quantum error correction with coherent noise"
+    },
+    "doi:10.1038/s41467-021-22274-1": {
+      "grade": 3,
+      "title": "The XZZX surface code."
+    },
+    "doi:10.22331/q-2023-07-25-1065": {
+      "grade": 3,
+      "title": "Adaptive surface code for quantum error correction in the presence of temporary or permanent defects"
+    },
+    "doi:10.1103/prxquantum.3.010315": {
+      "grade": 3,
+      "title": "Low overhead fault-tolerant quantum error correction with the surface-GKP code"
+    },
+    "doi:10.1038/s41586-026-10559-8": {
+      "grade": 1,
+      "title": "Author Correction: Quantum error correction below the surface code threshold."
+    },
+    "doi:10.1038/nature13171": {
+      "grade": 3,
+      "title": "Superconducting quantum circuits at the surface code threshold for fault tolerance."
+    },
+    "doi:10.1093/ptep/ptaf130": {
+      "grade": 3,
+      "title": "Hierarchical Quantum Error Correction with Hypergraph Product Code and Rotated Surface Code"
+    },
+    "doi:10.1038/s41586-024-07107-7": {
+      "grade": 2,
+      "title": "High-threshold and low-overhead fault-tolerant quantum memory."
+    },
+    "doi:10.1103/physrevlett.133.110601": {
+      "grade": 1,
+      "title": "Domain Wall Color Code."
+    },
+    "doi:10.1103/physrevresearch.2.013303": {
+      "grade": 2,
+      "title": "Parallelized quantum error correction with fracton topological codes"
+    },
+    "doi:10.1109/qce65121.2025.00270": {
+      "grade": 3,
+      "title": "Disparity Surface Code: Optimizing Error Correction in Quantum Networks"
+    }
+  },
+  "protein-language-models": {
+    "doi:10.1007/s00439-021-02411-y": {
+      "grade": 3,
+      "title": "Embeddings from protein language models predict conservation and variant effects."
+    },
+    "arxiv:080d98573a71a04a": {
+      "grade": 3,
+      "title": "Open-Source Protein Language Models for Function Prediction and Protein Design"
+    },
+    "doi:10.1101/2024.10.04.616755": {
+      "grade": 3,
+      "title": "pLM-DBPs: Enhanced DNA-Binding Protein Prediction in Plants Using Embeddings From Protein Language Models"
+    },
+    "doi:10.3390/ijms27093891": {
+      "grade": 3,
+      "title": "Integrating Protein Language Models with Multimodal Embeddings to Accelerate Function Prediction of Uncharacterized Proteins."
+    },
+    "arxiv:4868a831cc712436": {
+      "grade": 3,
+      "title": "Layer Probing Improves Kinase Functional Prediction with Protein Language Models"
+    },
+    "doi:10.1093/nar/gkae1113": {
+      "grade": 0,
+      "title": "The STRING database in 2025: protein networks with directionality of regulation."
+    },
+    "arxiv:35c645294f39a84f": {
+      "grade": 3,
+      "title": "Protein Language Model-Powered 3D Ligand Binding Site Prediction from Protein Sequence"
+    },
+    "doi:10.1109/ickg55886.2022.00021": {
+      "grade": 3,
+      "title": "Sequence-Structure Embeddings via Protein Language Models Improve on Prediction Tasks"
+    },
+    "doi:10.1038/s41598-024-80940-y": {
+      "grade": 2,
+      "title": "ParaAntiProt provides paratope prediction using antibody and protein language models."
+    },
+    "arxiv:82c2f71f3f57c329": {
+      "grade": 3,
+      "title": "Leveraging Protein Language Model Embeddings for Catalytic Turnover Prediction of Adenylate Kinase Orthologs in a Low-Data Regime"
+    },
+    "doi:10.64898/2026.04.27.721184": {
+      "grade": 3,
+      "title": "Protein Function Prediction with Pretrained ProtT5 Embeddings and Gradient Boosting"
+    },
+    "doi:10.1371/journal.pcbi.1012597": {
+      "grade": 2,
+      "title": "Prediction of virus-host associations using protein language models and multiple instance learning."
+    },
+    "arxiv:abcecefea13433cf": {
+      "grade": 3,
+      "title": "Reprogramming Pretrained Language Models for Protein Sequence Representation Learning"
+    },
+    "doi:10.1101/2021.07.31.454572": {
+      "grade": 3,
+      "title": "Protein language model embeddings for fast, accurate, alignment-free protein structure prediction"
+    },
+    "doi:10.1016/j.ab.2024.115637": {
+      "grade": 3,
+      "title": "Protein-peptide binding residue prediction based on protein language models and cross-attention mechanism."
+    },
+    "arxiv:01be55c0bb5470b6": {
+      "grade": 2,
+      "title": "pLMFPPred: a novel approach for accurate prediction of functional peptides integrating embedding from pre-trained protein language model and imbalanced learning"
+    },
+    "doi:10.64898/2025.12.30.697053": {
+      "grade": 2,
+      "title": "Sequence-Only Prediction of Antibody Fab Thermostability Using Protein Language Model Embeddings"
+    },
+    "doi:10.1109/tcbb.2024.3467261": {
+      "grade": 2,
+      "title": "Improving Antifreeze Proteins Prediction With Protein Language Models and Hybrid Feature Extraction Networks."
+    },
+    "arxiv:9aeed950a4d078eb": {
+      "grade": 3,
+      "title": "Sparse Autoencoders for Low-$N$ Protein Function Prediction and Design"
+    },
+    "doi:10.64898/2026.08.31.748056": {
+      "grade": 3,
+      "title": "Comprehensive Evaluation of Protein Language Model Embeddings for Drug–Target Affinity Prediction"
+    },
+    "doi:10.1016/j.bpj.2026.05.013": {
+      "grade": 3,
+      "title": "Protein function-conditioned language models for variant effect prediction and controllable design."
+    },
+    "arxiv:fb9038afb25c3532": {
+      "grade": 3,
+      "title": "Prot2Text-V2: Protein Function Prediction with Multimodal Contrastive Alignment"
+    },
+    "doi:10.1101/2021.04.19.440461": {
+      "grade": 3,
+      "title": "The power of universal contextualised protein embeddings in cross-species protein function prediction"
+    }
+  },
+  "wastewater-surveillance": {
+    "doi:10.1093/nsr/nwad089": {
+      "grade": 3,
+      "title": "Wastewater surveillance and an automated robot: effectively tracking SARS-CoV-2 transmission in the post-epidemic era."
+    },
+    "arxiv:de5aea91b058a286": {
+      "grade": 3,
+      "title": "A rigorous benchmarking of methods for SARS-CoV-2 lineage abundance estimation in wastewater"
+    },
+    "doi:10.17504/protocols.io.btfcnjiw": {
+      "grade": 2,
+      "title": "rt-qPCR for SARS-CoV-2 Wastewater Surveillance v1"
+    },
+    "doi:10.1371/journal.pone.0274793": {
+      "grade": 3,
+      "title": "The feasibility of SARS-CoV-2 surveillance using wastewater and environmental sampling in Indonesia."
+    },
+    "arxiv:830df1b62c68760b": {
+      "grade": 3,
+      "title": "The signal is not flushed away: Inferring the effective reproduction number from wastewater data in small populations"
+    },
+    "doi:10.2139/ssrn.4482357": {
+      "grade": 3,
+      "title": "Targeted Community Wastewater Surveillance for Sars-Cov-2 and Mpox Virus During a Mass-Gathering Event"
+    },
+    "doi:10.1016/j.watres.2023.119648": {
+      "grade": 3,
+      "title": "Wastewater surveillance of SARS-CoV-2 and influenza in preK-12 schools shows school, community, and citywide infections."
+    },
+    "doi:10.22215/etd/2022-15148": {
+      "grade": 3,
+      "title": "Wastewater Surveillance of SARS-CoV-2 at a Canadian University Campus and the Impact of Wastewater Characteristics on Viral RNA Detection."
+    },
+    "doi:10.1016/j.envres.2022.114277": {
+      "grade": 3,
+      "title": "Building-level wastewater surveillance of SARS-CoV-2 is associated with transmission and variant trends in a university setting."
+    },
+    "doi:10.2166/9781789064445_ch7": {
+      "grade": 2,
+      "title": "The devil is in the details: emerging insights on the relevance of wastewater surveillance for SARS-CoV-2 to public health"
+    },
+    "doi:10.1126/science.aed6094": {
+      "grade": 3,
+      "title": "Genetic variability of SARS-CoV-2 in wastewater and associations with community transmission."
+    },
+    "doi:10.33915/etd.13092": {
+      "grade": 1,
+      "title": "The Effect of SARS-CoV-2 on Bacterial Diversity and Abundance in Community Wastewater"
+    },
+    "doi:10.1016/j.scitotenv.2021.149757": {
+      "grade": 3,
+      "title": "Wastewater SARS-CoV-2 monitoring as a community-level COVID-19 trend tracker and variants in Ohio, United States."
+    },
+    "doi:10.17504/protocols.io.e6nvwk8b2vmk/v1": {
+      "grade": 2,
+      "title": "Quantification of the SARS-CoV-2 using Nanotrap Particles®, theQIAcuity™ Digital PCR System, and GT-Digital SARS-CoV-2 Wastewater Surveillance Assay v1"
+    },
+    "doi:10.1016/j.mtadv.2022.100211": {
+      "grade": 3,
+      "title": "SARS-CoV-2 in wastewater: From detection to evaluation."
+    },
+    "doi:10.1101/2024.08.02.24311410": {
+      "grade": 3,
+      "title": "The Use of Wastewater Surveillance to Estimate SARS-CoV-2 Fecal Viral Shedding Pattern and Identify Time Periods with Intensified Transmission"
+    },
+    "doi:10.1177/11786361231201598": {
+      "grade": 1,
+      "title": "SARS-CoV-2 Burden in Wastewater and its Elimination Using Disinfection."
+    },
+    "doi:10.52487/172756": {
+      "grade": 3,
+      "title": "Evaluation of the Public Health Utility of Wastewater-based Surveillance for Monitoring SARS-CoV-2 in Scotland"
+    }
+  },
+  "federated-learning-privacy": {
+    "doi:10.1038/s41598-022-05539-7": {
+      "grade": 3,
+      "title": "Federated learning and differential privacy for medical image analysis."
+    },
+    "doi:10.1117/12.3075111": {
+      "grade": 3,
+      "title": "ADP-FL-MedSeg: Adaptive Differential Privacy for Federated Medical Segmentation Across Diverse Modalities"
+    },
+    "doi:10.1016/b978-0-44-323641-9.00017-0": {
+      "grade": 1,
+      "title": "Differential privacy"
+    },
+    "doi:10.3390/diagnostics13193140": {
+      "grade": 2,
+      "title": "Medical Imaging Applications of Federated Learning."
+    },
+    "arxiv:a26998c8b31c2d35": {
+      "grade": 1,
+      "title": "Medical Federated Model with Mixture of Personalized and Sharing Components"
+    },
+    "doi:10.21203/rs.3.rs-8182728/v1": {
+      "grade": 3,
+      "title": "Federated Continual Learning with Adaptive Differential Privacy and Client-Side Drift Detection for Evolving Medical Imaging Datasets"
+    },
+    "doi:10.1007/s00259-023-06418-7": {
+      "grade": 3,
+      "title": "Differential privacy preserved federated transfer learning for multi-institutional 68Ga-PET image artefact detection and disentanglement."
+    },
+    "arxiv:51400454bc78d74b": {
+      "grade": 3,
+      "title": "Complex-valued Federated Learning with Differential Privacy and MRI Applications"
+    },
+    "doi:10.1109/i2ct51068.2021.9417997": {
+      "grade": 2,
+      "title": "Maintaining Privacy in Medical Imaging with Federated Learning, Deep Learning, Differential Privacy, and Encrypted Computation"
+    },
+    "doi:10.1109/embc53108.2024.10782682": {
+      "grade": 3,
+      "title": "Assessing the Impact of Federated Learning and Differential Privacy on Multi-centre Polyp Segmentation."
+    },
+    "arxiv:04ef59a9a10a4408": {
+      "grade": 3,
+      "title": "Differentially private federated deep learning for multi-site medical image segmentation"
+    },
+    "doi:10.1016/b978-0-44-323641-9.00018-2": {
+      "grade": 1,
+      "title": "Utility-privacy tradeoff in federated learning"
+    },
+    "doi:10.1117/12.3005993": {
+      "grade": 2,
+      "title": "FeSEC: A Secure and Efficient Federated Learning Framework for Medical Imaging."
+    },
+    "arxiv:c1e47d4b6a6af3ec": {
+      "grade": 3,
+      "title": "Client-Level Differential Privacy via Adaptive Intermediary in Federated Medical Imaging"
+    },
+    "doi:10.1145/3737899.3768515": {
+      "grade": 3,
+      "title": "FedPETv1: Edge-Aware Federated Learning with Differential Privacy for Distributed Medical Diagnostics"
+    },
+    "doi:10.3390/s25092847": {
+      "grade": 3,
+      "title": "Sensitivity-Aware Differential Privacy for Federated Medical Imaging."
+    },
+    "arxiv:1f3b392c8da03484": {
+      "grade": 3,
+      "title": "Vision Through the Veil: Differential Privacy in Federated Learning for Medical Image Classification"
+    },
+    "doi:10.1016/j.compmedimag.2025.102637": {
+      "grade": 1,
+      "title": "Secure and privacy-preserving surgical instrument segmentation in minimally invasive surgeries using federated differential privacy approach"
+    },
+    "doi:10.1177/20552076251358531": {
+      "grade": 2,
+      "title": "Federated learning and differential privacy: Machine learning and deep learning for biomedical image data classification."
+    },
+    "arxiv:b9abee0f4c8e4194": {
+      "grade": 3,
+      "title": "Towards Privacy-Preserving Medical Imaging: Federated Learning with Differential Privacy and Secure Aggregation Using a Modified ResNet Architecture"
+    },
+    "doi:10.1007/978-981-19-8692-5_5": {
+      "grade": 2,
+      "title": "Differential Privacy in Federated Learning"
+    },
+    "doi:10.1038/s44172-025-00485-4": {
+      "grade": 2,
+      "title": "Collaborative and privacy-preserving cross-vendor united diagnostic imaging via server-rotating federated machine learning."
+    },
+    "doi:10.59275/j.melba.2022-7175": {
+      "grade": 2,
+      "title": "A Differentially Private Probabilistic Framework for Modeling the Variability Across Federated Datasets of Heterogeneous Multi-View Observations"
+    },
+    "doi:10.70675/fd526e45z439bz439bz86c4z2c941668ff3c": {
+      "grade": 2,
+      "title": "Exploring Verifiable and Privacy-Preserving Federated Learning through Differential Privacy and Cryptographic Protocols"
+    }
+  },
+  "antibiotic-resistance-genes": {
+    "doi:10.1128/microbiolspec.arba-0026-2017": {
+      "grade": 2,
+      "title": "Antimicrobial Resistance in Escherichia coli."
+    },
+    "arxiv:e70fec53d0284e45": {
+      "grade": 1,
+      "title": "Self-assembling T7 phage syringes with modular genomes for targeted delivery of penicillin against beta-lactam-resistant Escherichia coli"
+    },
+    "doi:10.33003/sajols-2026-0402-27": {
+      "grade": 3,
+      "title": "Mechanisms of Antimicrobial Resistance in Gram-Negative Bacteria: A Review of β-Lactamases, Efflux Pumps, and Horizontal Gene Transfer"
+    },
+    "doi:10.1016/j.diagmicrobio.2025.116949": {
+      "grade": 3,
+      "title": "Understanding antimicrobial resistance (AMR) mechanisms and advancements in AMR diagnostics."
+    },
+    "doi:10.1007/978-3-319-39658-3_6": {
+      "grade": 3,
+      "title": "Antimicrobial Resistance in Bacteria: An Overview of Mechanisms and Role of Drug Efflux Pumps"
+    },
+    "doi:10.1002/jobm.202100201": {
+      "grade": 3,
+      "title": "Antibiotic resistance genes in bacteria: Occurrence, spread, and control."
+    },
+    "doi:10.1016/b978-012680126-2/50003-7": {
+      "grade": 3,
+      "title": "Plasmids and Transfer Mechanisms in Bacteria"
+    },
+    "doi:10.1128/cmr.00036-08": {
+      "grade": 2,
+      "title": "AmpC beta-lactamases."
+    },
+    "doi:10.1016/s0924-8579(07)70009-2": {
+      "grade": 3,
+      "title": "S3 The two mechanisms of gene capture behind most trimethoprim resistance in enteric bacteria"
+    },
+    "doi:10.1038/s41579-023-00958-3": {
+      "grade": 1,
+      "title": "Disinfectants and antiseptics: mechanisms of action and resistance."
+    },
+    "doi:10.1201/b17104-12": {
+      "grade": 3,
+      "title": "- AN INSIGHT INTO HORIZONTAL GENE TRANSFER TRIGGERING WIDESPREAD ANTIMICROBIAL RESISTANCE IN BACTERIA"
+    },
+    "doi:10.1111/nyas.12830": {
+      "grade": 2,
+      "title": "Mechanisms of drug resistance: quinolone resistance."
+    },
+    "doi:10.1007/978-1-59745-180-2_5": {
+      "grade": 3,
+      "title": "Genetic Mechanisms of Transfer of Drug Resistance"
+    },
+    "doi:10.1093/ismejo/wrad032": {
+      "grade": 3,
+      "title": "Inter-plasmid transfer of antibiotic resistance genes accelerates antibiotic resistance in bacterial pathogens."
+    },
+    "doi:10.1007/978-3-540-38918-7_5771": {
+      "grade": 3,
+      "title": "Gene Transfer Mechanisms (Bacteria)"
+    },
+    "doi:10.3390/ijms252212192": {
+      "grade": 1,
+      "title": "Serotypes, Antimicrobial Susceptibility, and Potential Mechanisms of Resistance Gene Transfer in Erysipelothrix rhusiopathiae Strains from Waterfowl in Poland."
+    },
+    "doi:10.1128/9781555817534.ch1": {
+      "grade": 2,
+      "title": "Modes of Antimicrobial Action and Mechanisms of Bacterial Resistance"
+    }
+  },
+  "doi-attention": {
+    "arxiv:f77a8bfbe10097a2": {
+      "grade": 3,
+      "title": "Attention Is All You Need"
+    }
+  },
+  "abstract-alphafold": {
+    "doi:10.1038/s41586-021-03819-2": {
+      "grade": 3,
+      "title": "Highly accurate protein structure prediction with AlphaFold."
+    },
+    "doi:10.1002/pro.4380": {
+      "grade": 2,
+      "title": "AlphaFold predicts the most complex protein knot and composite protein knots"
+    },
+    "doi:10.21203/rs.3.rs-3821040/v1": {
+      "grade": 2,
+      "title": "Accuracy of AlphaFold models: Comparison with short N ... O contacts in atomic resolution protein crystal structures"
+    },
+    "doi:10.1038/s41586-024-07487-w": {
+      "grade": 3,
+      "title": "Accurate structure prediction of biomolecular interactions with AlphaFold 3."
+    },
+    "arxiv:36188bd4b3d11bb8": {
+      "grade": 3,
+      "title": "From Prediction to Simulation: AlphaFold 3 as a Differentiable Framework for Structural Biology"
+    },
+    "doi:10.2139/ssrn.4030046": {
+      "grade": 2,
+      "title": "The Accuracy of Protein Structures in Solution Determined by AlphaFold and NMR"
+    },
+    "doi:10.1042/ebc20190042": {
+      "grade": 1,
+      "title": "Uncovering protein structure."
+    },
+    "arxiv:93e1dad257f703bb": {
+      "grade": 2,
+      "title": "Applications of Knot Theory for the Improvement of the AlphaFold Protein Database"
+    },
+    "doi:10.1093/nar/gkab1061": {
+      "grade": 3,
+      "title": "AlphaFold Protein Structure Database: massively expanding the structural coverage of protein-sequence space with high-accuracy models."
+    },
+    "doi:10.1002/pro.70134": {
+      "grade": 0,
+      "title": "Mass Balance Approximation of Unfolding Improves Potential-Like Methods for Protein Stability Predictions"
+    },
+    "doi:10.15252/msb.202311544": {
+      "grade": 2,
+      "title": "Protein complexes in cells by AI-assisted structural proteomics."
+    },
+    "doi:10.1371/journal.pone.0074830": {
+      "grade": 1,
+      "title": "Atomic-accuracy prediction of protein loop structures through an RNA-inspired ansatz"
+    },
+    "doi:10.1109/icedcs64328.2024.00052": {
+      "grade": 3,
+      "title": "A Study on the End-to-End AlphaFold 3D Protein Structure Prediction Method"
+    },
+    "doi:10.1038/s41586-019-1923-7": {
+      "grade": 3,
+      "title": "Improved protein structure prediction using potentials from deep learning."
+    },
+    "arxiv:ba7c97faf9ac9b26": {
+      "grade": 3,
+      "title": "Proteins with alternative folds reveal blind spots in AlphaFold-based protein structure prediction"
+    },
+    "doi:10.1038/d41586-024-03214-7": {
+      "grade": 1,
+      "title": "Chemistry Nobel goes to developers of AlphaFold AI that predicts protein structures"
+    },
+    "doi:10.1093/nar/gkad1011": {
+      "grade": 3,
+      "title": "AlphaFold Protein Structure Database in 2024: providing structure coverage for over 214 million protein sequences."
+    },
+    "doi:10.1186/s13040-020-00231-w": {
+      "grade": 0,
+      "title": "ISLAND: In-Silico Prediction of Proteins Binding Affinity Using Sequence Descriptors"
+    },
+    "doi:10.1101/2023.08.29.555151": {
+      "grade": 1,
+      "title": "High-accuracy mapping of human and viral direct physical protein-protein interactions using the novel computational system AlphaFold-pairs"
+    },
+    "doi:10.1073/pnas.2406407121": {
+      "grade": 3,
+      "title": "AlphaFold-Multimer accurately captures interactions and dynamics of intrinsically disordered protein regions."
+    },
+    "doi:10.1007/978-3-031-85902-1_28": {
+      "grade": 2,
+      "title": "Dihedral Angle Adherence: Evaluating Protein Structure Predictions in the Absence of Experimental Data"
     }
   }
 }

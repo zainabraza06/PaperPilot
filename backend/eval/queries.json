@@ -54,5 +54,89 @@
     "intent": "abstract_snippet",
     "domain": "computational biology",
     "why": "The pasted-abstract input mode. The upstream APIs only ever see distilled keywords; the ranker sees the full paragraph, which is precisely what the raw-text preservation in query_parser exists for."
+  },
+  {
+    "id": "gut-microbiome-obesity",
+    "query": "gut microbiome composition and obesity in humans",
+    "intent": "topic",
+    "domain": "biomedical",
+    "why": "Correlational biomedical topic with a huge, noisy literature and many review articles."
+  },
+  {
+    "id": "attention-efficient",
+    "query": "efficient attention linear complexity long sequences",
+    "intent": "topic",
+    "domain": "machine learning",
+    "why": "Method-family query where many papers propose competing variants of one idea."
+  },
+  {
+    "id": "alzheimers-amyloid",
+    "query": "amyloid beta hypothesis Alzheimer disease treatment",
+    "intent": "topic",
+    "domain": "biomedical",
+    "why": "Contested hypothesis - relevant papers include those arguing against it, which tests whether stance is confused with relevance."
+  },
+  {
+    "id": "reinforcement-rlhf",
+    "query": "reinforcement learning from human feedback alignment",
+    "intent": "topic",
+    "domain": "machine learning",
+    "why": "Recent, fast-moving area where arXiv should dominate and PubMed should legitimately return nothing."
+  },
+  {
+    "id": "crispr-off-target",
+    "query": "CRISPR off-target effects detection genome wide",
+    "intent": "topic",
+    "domain": "biomedical",
+    "why": "Shares vocabulary with the prime-editing query, testing whether ranking separates two adjacent sub-fields."
+  },
+  {
+    "id": "quantum-error-correction",
+    "query": "surface code quantum error correction threshold",
+    "intent": "topic",
+    "domain": "physics",
+    "why": "Outside biomedicine and ML entirely - checks the pipeline is not tuned to two domains."
+  },
+  {
+    "id": "protein-language-models",
+    "query": "protein language models embeddings function prediction",
+    "intent": "topic",
+    "domain": "cross-domain",
+    "why": "Sits between the protein-folding and transformer queries; tests cluster separation on genuinely overlapping topics."
+  },
+  {
+    "id": "wastewater-surveillance",
+    "query": "wastewater surveillance SARS-CoV-2 community transmission",
+    "intent": "topic",
+    "domain": "public health",
+    "why": "Applied public-health topic where the useful papers are methods and deployments, not virology."
+  },
+  {
+    "id": "federated-learning-privacy",
+    "query": "federated learning differential privacy medical imaging",
+    "intent": "topic",
+    "domain": "cross-domain",
+    "why": "Three-way intersection - relevance requires all three concepts, not any one."
+  },
+  {
+    "id": "antibiotic-resistance-genes",
+    "query": "antimicrobial resistance gene transfer mechanisms bacteria",
+    "intent": "keyword",
+    "domain": "biomedical",
+    "why": "Broad keyword query rather than a precise topic, testing the relaxation path."
+  },
+  {
+    "id": "doi-attention",
+    "query": "10.48550/arXiv.1706.03762",
+    "intent": "identifier",
+    "domain": "machine learning",
+    "why": "An arXiv DataCite DOI - exercises the identifier path against a non-publisher DOI prefix."
+  },
+  {
+    "id": "abstract-alphafold",
+    "query": "We describe AlphaFold, a computational method that predicts protein structures with near experimental accuracy in the majority of cases. Our approach draws on evolutionary, physical and geometric constraints of protein structures, incorporating them into a neural network architecture trained end to end on both labelled and unlabelled data.",
+    "intent": "abstract_snippet",
+    "domain": "cross-domain",
+    "why": "A second pasted-abstract case, in a different domain from the first, so the snippet path is not evaluated on one example."
   }
 ]
