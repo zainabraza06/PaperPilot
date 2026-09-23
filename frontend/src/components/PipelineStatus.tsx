@@ -31,7 +31,7 @@ export function PipelineStatus({ response }: { response: SearchResponse }) {
   return (
     <div
       className={cx(
-        'surface overflow-hidden text-sm',
+        'surface-panel overflow-hidden text-sm',
         degraded && 'border-amber-300 dark:border-amber-500/40',
       )}
     >
@@ -39,7 +39,7 @@ export function PipelineStatus({ response }: { response: SearchResponse }) {
         type="button"
         onClick={() => setExpanded((open) => !open)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/50"
+        className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-sunken/50"
       >
         <span className="flex items-center gap-1.5">
           {response.sources.map((report) => {
@@ -51,7 +51,7 @@ export function PipelineStatus({ response }: { response: SearchResponse }) {
                 className={cx(
                   'h-2 w-2 rounded-full',
                   copy.tone === 'ok' && 'bg-emerald-500',
-                  copy.tone === 'neutral' && 'bg-slate-300 dark:bg-slate-600',
+                  copy.tone === 'neutral' && 'bg-line-strong',
                   copy.tone === 'warn' && 'bg-amber-500',
                   copy.tone === 'error' && 'bg-rose-500',
                 )}
@@ -60,8 +60,8 @@ export function PipelineStatus({ response }: { response: SearchResponse }) {
           })}
         </span>
 
-        <span className="min-w-0 flex-1 truncate text-slate-600 dark:text-slate-300">
-          <strong className="font-semibold text-slate-900 dark:text-slate-100">
+        <span className="min-w-0 flex-1 truncate text-body">
+          <strong className="font-semibold text-strong">
             {response.total}
           </strong>{' '}
           {response.total === 1 ? 'paper' : 'papers'}
@@ -94,7 +94,7 @@ export function PipelineStatus({ response }: { response: SearchResponse }) {
 
         <svg
           className={cx(
-            'h-4 w-4 shrink-0 text-slate-400 transition-transform',
+            'h-4 w-4 shrink-0 text-faint transition-transform',
             expanded && 'rotate-180',
           )}
           viewBox="0 0 20 20"
@@ -110,7 +110,7 @@ export function PipelineStatus({ response }: { response: SearchResponse }) {
       </button>
 
       {expanded ? (
-        <div className="animate-fade-in space-y-3 border-t border-slate-200 px-4 py-3 dark:border-slate-800">
+        <div className="animate-fade-in space-y-3 border-t border-line px-4 py-3">
           <Section title="Sources">
             {response.sources.map((report) => {
               const copy = SOURCE_STATUS_COPY[report.status]
@@ -191,7 +191,7 @@ export function PipelineStatus({ response }: { response: SearchResponse }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+      <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-faint">
         {title}
       </h3>
       <dl className="space-y-1">{children}</dl>
@@ -212,11 +212,11 @@ function Row({
 }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-      <dt className="w-20 shrink-0 text-slate-500 dark:text-slate-400">{label}</dt>
+      <dt className="w-20 shrink-0 text-muted">{label}</dt>
       <dd className="flex flex-wrap items-baseline gap-2">
         <Badge tone={tone}>{value}</Badge>
         {note ? (
-          <span className="text-xs text-slate-500 dark:text-slate-400">{note}</span>
+          <span className="text-xs text-muted">{note}</span>
         ) : null}
       </dd>
     </div>

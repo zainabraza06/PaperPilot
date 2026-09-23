@@ -95,12 +95,12 @@ export function SearchBar({
     <div className="w-full">
       <div
         className={cx(
-          'surface flex items-start gap-3 p-3 shadow-sm transition',
-          'focus-within:border-accent-400 focus-within:shadow-md dark:focus-within:border-accent-500',
+          'flex items-start gap-3 rounded-2xl border border-control bg-surface p-2.5 ps-4 transition duration-200',
+          'shadow-subtle focus-within:border-accent-400 focus-within:shadow-raised',
         )}
       >
         <svg
-          className="mt-2 h-5 w-5 shrink-0 text-slate-400"
+          className="mt-2.5 h-[18px] w-[18px] shrink-0 text-faint"
           viewBox="0 0 20 20"
           fill="currentColor"
           aria-hidden="true"
@@ -128,29 +128,29 @@ export function SearchBar({
           placeholder="Search a topic, keyword, DOI, arXiv id, PMID — or paste an abstract"
           aria-label="Search query"
           spellCheck={false}
-          className="min-h-[28px] flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-6 outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
+          className="min-h-[32px] flex-1 resize-none bg-transparent py-2 text-md leading-6 text-strong outline-none placeholder:text-faint"
         />
 
         <button
           type="button"
           onClick={submit}
           disabled={busy || !value.trim()}
-          className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg bg-accent-600 px-4 text-sm font-semibold text-white transition hover:bg-accent-500 disabled:cursor-not-allowed disabled:opacity-40"
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-accent-600 px-4 text-sm font-semibold text-accent-fg shadow-subtle transition duration-150 hover:bg-accent-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? <Spinner className="h-4 w-4" /> : null}
           {busy ? 'Searching' : 'Search'}
         </button>
       </div>
 
-      <div className="mt-2 flex min-h-[24px] flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-slate-500 dark:text-slate-400">
+      <div className="mt-2.5 flex min-h-[24px] flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs text-muted">
         {intent && parsed ? (
           <span className="animate-fade-in inline-flex items-center gap-1.5">
-            <span className="inline-flex items-center rounded bg-accent-50 px-1.5 py-0.5 font-semibold text-accent-700 ring-1 ring-inset ring-accent-600/20 dark:bg-accent-500/10 dark:text-accent-300 dark:ring-accent-400/20">
+            <span className="inline-flex items-center rounded-md bg-accent-50 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-accent-600">
               {intent.label}
             </span>
             <span>{intent.hint}</span>
             {parsed.intent === 'abstract_snippet' && parsed.keywords.length > 0 ? (
-              <span className="font-mono text-[11px] text-slate-400 dark:text-slate-500">
+              <span className="font-mono text-2xs text-faint">
                 → {parsed.keywords.slice(0, 6).join(' ')}
               </span>
             ) : null}
@@ -166,13 +166,17 @@ export function SearchBar({
                   setValue(example.value)
                   onSearch(example.value)
                 }}
-                className="rounded px-1 font-medium text-accent-600 underline-offset-2 transition hover:underline dark:text-accent-400"
+                className="rounded-md px-1.5 py-0.5 font-medium text-accent-600 transition hover:bg-accent-50"
               >
                 {example.label}
               </button>
             ))}
             <span className="ml-auto hidden sm:inline">
-              Press <kbd className="rounded border border-slate-300 px-1 font-sans dark:border-slate-600">/</kbd> to focus
+              Press{' '}
+              <kbd className="rounded border border-line-strong bg-sunken px-1.5 py-px font-sans text-2xs text-muted">
+                /
+              </kbd>{' '}
+              to focus
             </span>
           </>
         )}

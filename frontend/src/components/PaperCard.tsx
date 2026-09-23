@@ -6,91 +6,102 @@ import { SummaryBlock } from './SummaryBlock'
 /**
  * One result row.
  *
- * Ordered by what a researcher scans for: title, then who and where, then
- * the summary, then the machinery. The relevance bar sits at the far right
- * of the metadata line so the whole column can be read vertically without
- * the eye crossing the card.
+ * Ordered by what a researcher scans for: rank, title, then who and where,
+ * then the summary, then the machinery. The relevance meter sits on the
+ * metadata line so the whole column can be read vertically without the eye
+ * crossing the card.
  *
- * The whole card is clickable to open the detail view, but the title is
- * also a real link to the paper, and the checkbox and DOI link stop
- * propagation — so "select this" and "go to the publisher" never trigger
- * "open the modal".
+ * **On the click target.** An earlier version made the whole card
+ * `role="button"` with `tabIndex={0}`, wrapping a real link and a real
+ * checkbox. That is invalid — interactive elements must not nest — and it
+ * flattens the card for assistive technology: the heading, the link to the
+ * publisher and the select control all disappear into one announcement of
+ * "button, open details for …".
+ *
+ * The accessible version of "click anywhere" is a stretched link: the
+ * title anchor is the control, and a transparent pseudo-element extends
+ * its hit area over the card. Everything genuinely interactive sits above
+ * that overlay. The card keeps its `article` semantics, keyboard users get
+ * one tab stop per meaningful control instead of two overlapping ones, and
+ * the pointer affordance is unchanged.
  */
 export function PaperCard({
   paper,
+  rank,
   selected,
   selectionMode,
   onToggleSelect,
   onOpen,
 }: {
   paper: Paper
+  rank: number
   selected: boolean
   selectionMode: boolean
   onToggleSelect: (id: string) => void
   onOpen: (paper: Paper) => void
 }) {
   const authorNames = paper.authors.map((author) => author.name)
+  const sources =
+    paper.also_found_in.length > 0 ? [paper.source, ...paper.also_found_in] : [paper.source]
 
   return (
     <article
-      onClick={() => onOpen(paper)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onOpen(paper)
-        }
-      }}
-      tabIndex={0}
-      role="button"
-      aria-label={`Open details for ${paper.title}`}
-      className={cx(
-        'surface group animate-fade-in cursor-pointer p-4 transition',
-        'hover:border-slate-300 hover:shadow-md dark:hover:border-slate-700',
-        selected && 'border-accent-400 ring-1 ring-accent-400 dark:border-accent-500 dark:ring-accent-500',
-      )}
+      data-selected={selected}
+      className={cx('card group animate-fade-in p-4 sm:p-5', selected && 'bg-accent-50/40')}
     >
-      <div className="flex gap-3">
+      <div className="flex gap-3 sm:gap-4">
         {selectionMode ? (
           <input
             type="checkbox"
             checked={selected}
-            onClick={(event) => event.stopPropagation()}
             onChange={() => onToggleSelect(paper.id)}
             aria-label={`Select ${paper.title}`}
-            className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-slate-300 text-accent-600 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800"
+            className="card-raise mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border-control bg-surface text-accent-600 focus:ring-accent-500"
           />
-        ) : null}
+        ) : (
+          <span
+            aria-hidden="true"
+            className="mt-0.5 hidden w-6 shrink-0 text-right text-sm font-medium tabular-nums text-faint sm:block"
+          >
+            {rank}
+          </span>
+        )}
 
         <div className="min-w-0 flex-1">
-          <h2 className="text-[15px] font-semibold leading-snug text-slate-900 dark:text-slate-50">
-            <a
-              href={paper.url}
-              target="_blank"
-              rel="noreferrer"
-              onClick={(event) => event.stopPropagation()}
-              className="decoration-accent-400 underline-offset-2 hover:underline"
+          <h2 className="text-lg font-semibold text-strong">
+            {/* The stretched control. It opens the detail view rather than
+                navigating away, because the detail view is where the
+                entities, the full summary and the citation live — the
+                publisher link is still one click away inside it. */}
+            <button
+              type="button"
+              onClick={() => onOpen(paper)}
+              // Deliberately *not* .card-raise: the overlay is positioned
+              // against the nearest positioned ancestor, so making this
+              // button relative would shrink the hit area back to the text.
+              className="stretch-target text-left decoration-accent-400 decoration-2 underline-offset-[3px] group-hover:underline"
             >
               {paper.title}
-            </a>
+            </button>
           </h2>
 
-          <p className="mt-1 truncate text-sm text-slate-600 dark:text-slate-400">
-            {formatAuthors(authorNames)}
-          </p>
+          <p className="mt-1 truncate text-base text-muted">{formatAuthors(authorNames)}</p>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
-            <SourceBadges sources={paper.also_found_in.length > 0
-              ? [paper.source, ...paper.also_found_in]
-              : [paper.source]} />
+          <div className="meta-row mt-2 flex flex-wrap items-center text-xs text-muted">
+            <SourceBadges sources={sources} />
             <span>{formatDate(paper.published_date)}</span>
             {paper.journal ? (
-              <span className="max-w-[16rem] truncate italic">{paper.journal}</span>
+              <span className="max-w-[18rem] truncate italic">{paper.journal}</span>
             ) : null}
             {paper.citation_count !== null && paper.citation_count !== undefined ? (
-              <span>{paper.citation_count.toLocaleString()} citations</span>
+              <span className="tabular-nums">
+                {paper.citation_count.toLocaleString()} citations
+              </span>
             ) : null}
             {paper.score ? (
-              <span className="ml-auto">
+              // Pushed to the end of the line rather than into the middot
+              // run, so the meters line up down the list.
+              <span className="no-sep ms-auto ps-3">
                 <ScoreBar
                   value={paper.score.combined}
                   semantic={paper.score.semantic}
@@ -107,28 +118,29 @@ export function PaperCard({
           {paper.summary && paper.summary.grounding.status !== 'unverifiable' ? (
             <SummaryBlock summary={paper.summary} className="mt-3" />
           ) : paper.abstract ? (
-            <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              {paper.abstract}
-            </p>
+            <p className="mt-3 line-clamp-2 max-w-[70ch] text-base text-muted">{paper.abstract}</p>
           ) : (
-            <p className="mt-3 text-sm italic text-slate-400 dark:text-slate-500">
-              No abstract deposited — this record can still be ranked and cited, but
-              not summarized or verified.
+            <p className="mt-3 max-w-[70ch] text-base italic text-faint">
+              No abstract deposited — this record can still be ranked and cited, but not
+              summarized or verified.
             </p>
           )}
 
           {paper.entities.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-1">
-              {paper.entities.slice(0, 6).map((entity) => (
-                <span
+            <ul className="mt-3 flex flex-wrap items-center gap-1.5">
+              {paper.entities.slice(0, 5).map((entity) => (
+                <li
                   key={`${entity.text}-${entity.label}`}
                   title={entity.label.replace(/_/g, ' ')}
-                  className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  className="rounded border border-line bg-sunken px-1.5 py-px font-mono text-2xs text-muted"
                 >
                   {entity.text}
-                </span>
+                </li>
               ))}
-            </div>
+              {paper.entities.length > 5 ? (
+                <li className="text-2xs text-faint">+{paper.entities.length - 5} more</li>
+              ) : null}
+            </ul>
           ) : null}
         </div>
       </div>

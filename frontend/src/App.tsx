@@ -113,24 +113,38 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-slate-50/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
+      {/* WCAG 2.4.1. On a page whose main content sits behind a header and
+          a history rail, a keyboard user otherwise tabs through both on
+          every single search. */}
+      <a
+        href="#results"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-strong focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-canvas"
+      >
+        Skip to results
+      </a>
+
+      <header className="sticky top-0 z-30 border-b border-line bg-canvas/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-4 sm:px-6">
           <button
             type="button"
             onClick={() => setSidebarOpen((open) => !open)}
             aria-label="Toggle search history"
-            className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 lg:hidden dark:text-slate-400 dark:hover:bg-slate-800"
+            aria-expanded={sidebarOpen}
+            className="-ms-2 inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted transition hover:bg-sunken hover:text-strong lg:hidden"
           >
             <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75Zm0 5A.75.75 0 0 1 2.75 9h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 9.75Zm0 5a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z" />
             </svg>
           </button>
 
-          <a href="/" className="flex shrink-0 items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-600 text-sm font-bold text-white">
+          <a href="/" className="flex shrink-0 items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-accent-400 to-accent-600 text-[11px] font-bold text-accent-fg shadow-subtle"
+            >
               PP
             </span>
-            <span className="hidden text-[15px] font-semibold tracking-tight sm:inline">
+            <span className="text-md font-semibold tracking-tight text-strong">
               PaperPilot
             </span>
           </a>
@@ -145,11 +159,12 @@ export default function App() {
                     return !on
                   })
                 }}
+                aria-pressed={selectionMode}
                 className={cx(
-                  'rounded-lg px-3 py-1.5 text-sm font-medium transition',
+                  'h-9 rounded-lg px-3 text-sm font-medium transition duration-150',
                   selectionMode
-                    ? 'bg-accent-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                    ? 'bg-accent-600 text-accent-fg shadow-subtle'
+                    : 'text-muted hover:bg-sunken hover:text-strong',
                 )}
               >
                 {selectionMode ? 'Done' : 'Select'}
@@ -175,13 +190,13 @@ export default function App() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
+      <div className="mx-auto flex max-w-6xl gap-8 px-4 py-6 sm:px-6">
         {/* History is a persistent rail on wide screens and a drawer on
             narrow ones, rather than being dropped on mobile: a daily user
             reaching for yesterday's query is doing that on any device. */}
         <div
           className={cx(
-            'fixed inset-0 z-40 bg-slate-900/40 lg:hidden',
+            'fixed inset-0 z-40 bg-strong/30 backdrop-blur-sm lg:hidden',
             sidebarOpen ? 'block' : 'hidden',
           )}
           onClick={() => setSidebarOpen(false)}
@@ -189,12 +204,12 @@ export default function App() {
         />
         <div
           className={cx(
-            'z-40 w-64 shrink-0',
-            'max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:overflow-y-auto max-lg:border-r max-lg:bg-slate-50 max-lg:p-4 max-lg:transition-transform dark:max-lg:border-slate-800 dark:max-lg:bg-slate-950',
+            'z-40 w-60 shrink-0',
+            'max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:overflow-y-auto max-lg:border-e max-lg:border-line max-lg:bg-canvas max-lg:p-4 max-lg:transition-transform',
             sidebarOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
           )}
         >
-          <div className="lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100vh-6rem)]">
+          <div className="lg:sticky lg:top-[4.75rem] lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
             <HistorySidebar
               history={history}
               activeQuery={response?.query.raw ?? null}
@@ -205,7 +220,7 @@ export default function App() {
           </div>
         </div>
 
-        <main className="min-w-0 flex-1 space-y-4">
+        <main id="results" className="min-w-0 flex-1 space-y-4">
           <SearchBar
             onSearch={handleSearch}
             busy={state.status === 'searching'}
@@ -252,16 +267,17 @@ export default function App() {
                     <button
                       type="button"
                       onClick={selectAllVisible}
-                      className="text-sm font-medium text-accent-600 hover:underline dark:text-accent-400"
+                      className="rounded-md px-1.5 py-1 text-sm font-medium text-accent-600 transition hover:bg-accent-50"
                     >
                       {allVisibleSelected ? 'Deselect' : 'Select'} all {visiblePapers.length} shown
                     </button>
                   ) : null}
 
-                  <div className="space-y-3">
-                    {visiblePapers.map((paper) => (
+                  <div className="space-y-2.5">
+                    {visiblePapers.map((paper, index) => (
                       <PaperCard
                         key={paper.id}
+                        rank={index + 1}
                         paper={paper}
                         selected={selected.has(paper.id)}
                         selectionMode={selectionMode}
@@ -297,7 +313,7 @@ export default function App() {
             reset()
             setQueryInput('')
           }}
-          className="sr-only focus:not-sr-only focus:fixed focus:bottom-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-slate-900 focus:px-3 focus:py-2 focus:text-sm focus:text-white"
+          className="sr-only focus:not-sr-only focus:fixed focus:bottom-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-strong focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-canvas"
         >
           Clear search
         </button>

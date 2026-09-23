@@ -75,7 +75,7 @@ export function ExportBar({
             className={cx(
               'mb-2 rounded-lg px-3 py-2 text-sm shadow-lg',
               notice.tone === 'ok'
-                ? 'bg-slate-900 text-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                ? 'bg-strong text-canvas'
                 : 'bg-rose-600 text-white',
             )}
           >
@@ -83,12 +83,12 @@ export function ExportBar({
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white/95 p-2.5 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-          <span className="px-1.5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface/95 p-2.5 shadow-xl backdrop-blur">
+          <span className="px-1.5 text-sm font-semibold text-strong">
             {selectedIds.length} selected
           </span>
 
-          <span className="hidden text-sm text-slate-400 sm:inline">Export as</span>
+          <span className="hidden text-sm text-faint sm:inline">Export as</span>
 
           <div className="flex flex-wrap gap-1.5">
             {formats.map((format) => (
@@ -108,7 +108,7 @@ export function ExportBar({
           <button
             type="button"
             onClick={onClear}
-            className="ml-auto rounded-lg px-2.5 py-1.5 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            className="ml-auto rounded-lg px-2.5 py-1.5 text-sm text-muted transition hover:bg-sunken hover:text-strong"
           >
             Clear
           </button>

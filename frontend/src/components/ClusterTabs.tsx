@@ -12,6 +12,12 @@ import { cx } from './primitives'
  * rather than inventing tabs, so when this renders at all the groups are
  * meaningful — and when it does not render, that absence is itself
  * accurate rather than a missing feature.
+ *
+ * Rendered as a scrolling filter rail rather than filled pills. Cluster
+ * labels are generated from the papers, so they can be three words or
+ * eight; a row of solid buttons at varying widths reads as clutter, while
+ * a quiet rail with one selected item reads as a filter. The rail scrolls
+ * horizontally on narrow screens instead of wrapping to three lines.
  */
 export function ClusterTabs({
   clusters,
@@ -28,13 +34,16 @@ export function ClusterTabs({
 
   return (
     <div
-      className="flex flex-wrap items-center gap-1.5"
+      className="-mx-1 flex snap-x items-center gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       role="tablist"
       aria-label="Filter by sub-topic"
     >
       <Tab active={active === null} onClick={() => onSelect(null)} count={total}>
         All results
       </Tab>
+
+      <span aria-hidden="true" className="mx-1 h-4 w-px shrink-0 bg-line" />
+
       {clusters.map((cluster) => (
         <Tab
           key={cluster.id}
@@ -71,17 +80,17 @@ function Tab({
       onClick={onClick}
       title={title}
       className={cx(
-        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition',
+        'inline-flex shrink-0 snap-start items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition duration-150',
         active
-          ? 'bg-accent-600 text-white shadow-sm'
-          : 'bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-50 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-slate-800',
+          ? 'bg-strong text-canvas'
+          : 'text-muted hover:bg-sunken hover:text-strong',
       )}
     >
-      <span className="max-w-[18rem] truncate">{children}</span>
+      <span className="max-w-[16rem] truncate">{children}</span>
       <span
         className={cx(
-          'rounded px-1 text-xs tabular-nums',
-          active ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800',
+          'tabular-nums text-2xs',
+          active ? 'text-canvas/60' : 'text-faint',
         )}
       >
         {count}

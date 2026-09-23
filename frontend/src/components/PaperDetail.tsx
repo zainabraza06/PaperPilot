@@ -15,11 +15,11 @@ const ENTITY_CLASSES: Record<EntityLabel, string> = {
   organism: 'bg-lime-100 text-lime-900 dark:bg-lime-500/25 dark:text-lime-100',
   anatomy: 'bg-pink-100 text-pink-900 dark:bg-pink-500/25 dark:text-pink-100',
   cell_type: 'bg-teal-100 text-teal-900 dark:bg-teal-500/25 dark:text-teal-100',
-  technical_term: 'bg-accent-100 text-accent-900 dark:bg-accent-500/25 dark:text-accent-100',
+  technical_term: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-500/25 dark:text-indigo-100',
   organization: 'bg-sky-100 text-sky-900 dark:bg-sky-500/25 dark:text-sky-100',
   person: 'bg-violet-100 text-violet-900 dark:bg-violet-500/25 dark:text-violet-100',
   location: 'bg-orange-100 text-orange-900 dark:bg-orange-500/25 dark:text-orange-100',
-  other: 'bg-slate-200 text-slate-800 dark:bg-slate-600/40 dark:text-slate-100',
+  other: 'bg-line-strong text-body',
 }
 
 interface Segment {
@@ -146,7 +146,7 @@ export function PaperDetail({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm sm:p-8"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-strong/50 p-4 backdrop-blur-sm sm:p-8"
       onClick={onClose}
       role="presentation"
     >
@@ -155,11 +155,11 @@ export function PaperDetail({
         aria-modal="true"
         aria-label={paper.title}
         onClick={(event) => event.stopPropagation()}
-        className="surface animate-scale-in my-auto w-full max-w-3xl shadow-2xl"
+        className="surface-panel animate-scale-in my-auto w-full max-w-3xl shadow-dialog"
       >
-        <header className="flex items-start gap-4 border-b border-slate-200 p-5 dark:border-slate-800">
+        <header className="flex items-start gap-4 border-b border-line p-5">
           <div className="min-w-0 flex-1">
-            <h2 className="text-lg font-semibold leading-snug text-slate-900 dark:text-slate-50">
+            <h2 className="text-lg font-semibold leading-snug text-strong">
               <Highlighted
                 text={paper.title}
                 entities={paper.entities}
@@ -167,7 +167,7 @@ export function PaperDetail({
                 enabled={highlight}
               />
             </h2>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted">
               <SourceBadges
                 sources={
                   paper.also_found_in.length > 0
@@ -182,7 +182,7 @@ export function PaperDetail({
                   href={`https://doi.org/${paper.doi}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="font-mono text-accent-600 hover:underline dark:text-accent-400"
+                  className="font-mono text-accent-600 hover:underline"
                 >
                   {paper.doi}
                 </a>
@@ -194,7 +194,7 @@ export function PaperDetail({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            className="rounded-lg p-1.5 text-faint transition hover:bg-sunken hover:text-body"
           >
             <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
@@ -204,10 +204,10 @@ export function PaperDetail({
 
         <div className="max-h-[60vh] space-y-5 overflow-y-auto p-5">
           <section>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
               Authors
             </p>
-            <p className="text-sm text-slate-700 dark:text-slate-300">
+            <p className="text-sm text-body">
               {paper.authors.length > 0
                 ? paper.authors.map((author) => author.name).join(', ')
                 : 'No authors listed'}
@@ -218,7 +218,7 @@ export function PaperDetail({
               the title, which is already at the top of this dialog. */}
           {paper.summary && paper.summary.grounding.status !== 'unverifiable' ? (
             <section>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
                 Summary
               </p>
               <SummaryBlock summary={paper.summary} full />
@@ -227,23 +227,23 @@ export function PaperDetail({
 
           <section>
             <div className="mb-2 flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              <p className="text-xs font-semibold uppercase tracking-wide text-faint">
                 Abstract
               </p>
               {paper.entities.length > 0 ? (
-                <label className="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted">
                   <input
                     type="checkbox"
                     checked={highlight}
                     onChange={(event) => setHighlight(event.target.checked)}
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-accent-600 focus:ring-accent-500 dark:border-slate-600 dark:bg-slate-800"
+                    className="h-3.5 w-3.5 rounded border-control text-accent-600 focus:ring-accent-500"
                   />
                   Highlight entities
                 </label>
               ) : null}
             </div>
             {paper.abstract ? (
-              <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              <p className="text-sm leading-relaxed text-body">
                 <Highlighted
                   text={paper.abstract}
                   entities={paper.entities}
@@ -252,7 +252,7 @@ export function PaperDetail({
                 />
               </p>
             ) : (
-              <p className="text-sm italic text-slate-400 dark:text-slate-500">
+              <p className="text-sm italic text-faint">
                 No abstract was deposited for this record. It can still be ranked and
                 cited, but not summarized or verified.
               </p>
@@ -261,7 +261,7 @@ export function PaperDetail({
 
           {labelsPresent.length > 0 && highlight ? (
             <section>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
                 Entity types
               </p>
               <div className="flex flex-wrap gap-1.5">
@@ -279,14 +279,14 @@ export function PaperDetail({
 
           {paper.keywords.length > 0 ? (
             <section>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-faint">
                 Keywords
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {paper.keywords.map((keyword) => (
                   <span
                     key={keyword}
-                    className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                    className="rounded bg-sunken px-1.5 py-0.5 text-xs text-muted"
                   >
                     {keyword}
                   </span>
@@ -296,8 +296,8 @@ export function PaperDetail({
           ) : null}
         </div>
 
-        <footer className="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4 dark:border-slate-800">
-          <span className="mr-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+        <footer className="flex flex-wrap items-center gap-2 border-t border-line p-4">
+          <span className="mr-1 text-xs font-medium text-muted">
             Cite as
           </span>
           {formats.map((format) => (
@@ -306,7 +306,7 @@ export function PaperDetail({
               type="button"
               onClick={() => void handleExport(format)}
               disabled={exporting !== null}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-accent-400 hover:text-accent-700 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:border-accent-500 dark:hover:text-accent-300"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-body transition hover:border-accent-400 hover:text-accent-700 disabled:opacity-50 dark:hover:border-accent-500 dark:hover:text-accent-300"
             >
               {exporting === format ? <Spinner className="h-3 w-3" /> : null}
               {EXPORT_FORMAT_LABELS[format]}
