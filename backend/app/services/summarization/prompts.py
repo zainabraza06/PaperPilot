@@ -22,6 +22,23 @@ from app.models.summary import GroundingIssue
 #: v2 forbids markdown emphasis. The model was returning "replaces
 #: **CRISPR-Cas9** with the smaller **Cas12a**", which a web UI renders as
 #: literal asterisks.
+#:
+#: A v3 was written and thrown away, which is worth recording so it is not
+#: tried again. The quality harness showed these summaries carrying less
+#: of the abstract than the extractive fallback does (coverage 0.658
+#: against 0.730 on 94 live papers), so v3 asked for the question, the
+#: method *and* the finding, and added a rule about not stopping after the
+#: background. Re-measured on 100 fresh papers it moved coverage by
+#: nothing at all -- 0.658 to 0.658 -- while compression rose from 0.428
+#: to 0.464 and redundancy from 0.556 to 0.597. The summaries got roughly
+#: eight percent longer and carried exactly as much. Lead bias got
+#: slightly worse too (0.601 to 0.569), so the added rule did not even buy
+#: the thing it named.
+#:
+#: The coverage gap is therefore not a prompt problem, and asking harder
+#: is not the lever. It is what a 2-3 sentence budget costs: three
+#: sentences of compressed prose hold less of an abstract than three
+#: sentences lifted from it, and that is the trade the feature makes.
 PROMPT_VERSION = 2
 
 SYSTEM_PROMPT = """You summarize scientific paper abstracts for researchers.
