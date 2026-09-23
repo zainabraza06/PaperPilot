@@ -77,15 +77,28 @@ Cut to the terminal:
 cd backend && python -m scripts.evaluate_ranking
 ```
 
-> "Eight queries, 174 candidates, every one hand-judged. Hybrid gets
-> Recall@10 of 0.630 against a ceiling of 0.675 — 93% of what any ranking
+> "Twenty queries, 411 candidates, every one hand-judged. Hybrid gets
+> Recall@10 of 0.630 against a ceiling of 0.669 — 94% of what any ranking
 > could achieve, because most queries have more relevant papers than k."
+
+Point at the last row of the table:
+
+> "That row is the ablation. Growing the golden set from 8 queries to 20
+> exposed a bug: records that are nothing but a title were out-ranking real
+> papers, because both scorers reward term density and a two-word title is
+> maximally dense. Controlling for relevance grade they ranked 15 to 31
+> percentiles too high — at every grade, so it was scoring, not quality.
+> The pooled averages hid it, because those stubs are genuinely more
+> relevant on average. A document-length prior fixed it: NDCG@10 0.901 to
+> 0.915."
 
 The honest bit, worth saying out loud:
 
-> "Hybrid beats semantic alone by about a point on eight queries, which is
-> inside the noise. What is defensible is that both clearly beat retrieval
-> order, and hybrid is the safer default because it degrades better."
+> "The k in that prior came from a paired bootstrap, not from the best cell
+> of a sweep — and that mattered. The biggest number in the sweep was
+> NDCG@5 +0.038, and its confidence interval spans zero on a 6-4 split.
+> The one I shipped is +0.014 with an interval that excludes zero. I took
+> the smaller, real effect."
 
 ## 4. Sub-topics (~30s)
 
@@ -123,14 +136,63 @@ python -m scripts.evaluate_grounding
 **Point at the last row, not the first five.** This is the most important
 thirty seconds of the demo:
 
-> "Recall on designed corruptions is ~100%, and that number is nearly
+> "Recall on designed corruptions is 100%, and that number is nearly
 > meaningless — each corruption is a clean instance of exactly the failure
-> one rule was written to catch. The two rows that matter: a 0.7%
-> false-positive rate on paraphrased text, which is the real cost of
-> checking. And 100% of recombination attacks slip through — claims built
-> entirely from the abstract's own vocabulary. The check is lexical, not
-> inferential. I measured the blind spot rather than claiming there isn't
-> one."
+> one rule was written to catch. The rows that matter are the last two: a
+> 0.8% false-positive rate on paraphrased text, which is the real cost of
+> checking, and the recombination row."
+
+> "A recombination is a claim built entirely from the abstract's own
+> sentences that the abstract never makes. The six lexical rules caught
+> **zero of 934** — not a low rate, none. So there's a seventh check that
+> compares each summary sentence against contiguous windows of the
+> abstract, reusing the embedder that's already loaded for ranking rather
+> than shipping an NLI model to have one model grade another. That takes it
+> from 0% to 61%."
+
+The number to be careful about, and the best thing to say here:
+
+> "61% is the operating point, not the maximum. At a stricter threshold it
+> catches 95% — and cautions **44% of perfectly good summaries**. A warning
+> that fires on two summaries in five is one a reader learns to skip, so
+> it would cost the signal entirely. At the shipped threshold it cautions 5
+> in 100. And the synthetic benchmark lied about this: on hand-built
+> paraphrases the strict threshold looked nearly free. Only live generation
+> showed the real price, because summarizing compresses harder than any
+> rewrite rule does."
+
+> "Support failures are shown as a caution and the summary stands. Only the
+> deterministic rules reject. Two in five recombinations still get through —
+> it's a similarity threshold, not entailment."
+
+### 5b. Is it any *good*, though? (~30s)
+
+```bash
+python -m scripts.evaluate_summaries --limit 100 --quality
+```
+
+> "Everything so far asks whether a summary is *false*. None of it asks
+> whether it's *useful* — 'This paper studies proteins' is perfectly
+> grounded. So this scores the generated summaries next to two baselines on
+> the same abstracts: the first three sentences, and the extractive
+> fallback that ships for free."
+
+Point at the coverage row:
+
+> "The generated summary genuinely rewrites — 71% of its bigrams aren't in
+> the source, against 2% for the extractive baseline, and it never lifts a
+> clause longer than 8% of itself. It reads the whole abstract rather than
+> the opening. And it carries about 10% *less* of the abstract's content
+> than just taking three sentences, at the same length. That's a trade, not
+> a win, and I report it as one."
+
+If asked whether that can be fixed:
+
+> "I tried. I rewrote the prompt to ask for the question, the method and
+> the finding explicitly. Coverage moved from 0.658 to 0.658 — nothing —
+> while the summaries got 8% longer. I reverted it and left the reasoning
+> in the file so I don't try it again. It isn't a prompt problem; it's what
+> a three-sentence budget costs."
 
 ## 6. Entities (~20s)
 
@@ -195,10 +257,17 @@ They are what separates this from a feature tour:
 
 1. **The degraded-source banner.** The design point of the whole reporting layer.
 2. **"First attempt rejected for".** The grounding layer made visible.
-3. **The grounding blind spot at 100%.** Measuring where your own work fails is
-   the most credible thing in the recording.
+3. **The recombination row, 0% → 61%.** Measuring where your own work fails is
+   the most credible thing in the recording — and the honest version is that
+   it went from "blind" to "misses two in five", not to "solved".
 4. **The recall ceiling.** 0.630 reads like a bad number until you say the
-   ceiling is 0.675.
+   ceiling is 0.669.
+5. **The quality table where the LLM loses.** Generated summaries carry ~10%
+   *less* of the abstract than just taking three sentences. Say that out
+   loud: it is the clearest signal that these numbers were measured rather
+   than chosen.
+6. **The bootstrap, not the sweep maximum.** The largest number in the sweep
+   was noise; the shipped one is small and real.
 
 ## Do not claim
 
@@ -206,5 +275,8 @@ They are what separates this from a feature tour:
 - That hybrid ranking is decisively better than semantic alone. On this set
   it is not.
 - That the grounding check catches hallucinations in general. It catches
-  fabricated numbers, entities, reversed directions and drift. It does not
-  do entailment.
+  fabricated numbers, entities, reversed directions and drift, and about
+  three in five recombinations. It does not do entailment.
+- That the AI summary is better than the extractive fallback. It is more
+  abstractive and reads more of the abstract; it also covers less of it.
+  That trade is measured, and it is a trade.

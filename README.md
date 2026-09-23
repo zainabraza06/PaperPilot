@@ -285,23 +285,31 @@ model wants exactly that.
 
 ### Results
 
-Eight queries, 174 candidates, **every candidate hand-judged** on a 0–3 scale.
+**20 queries, 411 candidates, every candidate hand-judged** on a 0–3 scale.
 Reproduce with `python -m scripts.evaluate_ranking`.
 
 | strategy                     | R@5   | R@10  | R@20  | NDCG@5 | NDCG@10 | NDCG@20 | MRR   |
 |------------------------------|-------|-------|-------|--------|---------|---------|-------|
-| retrieval-order (no ranking) | 0.255 | 0.525 | 0.914 | 0.703  | 0.711   | 0.822   | 0.875 |
-| lexical only (BM25)          | 0.296 | 0.580 | 0.976 | 0.798  | 0.843   | 0.921   | 0.906 |
-| semantic only (embeddings)   | 0.347 | 0.620 | 0.976 | 0.877  | 0.887   | 0.943   | **1.000** |
-| **hybrid linear (α=0.6)**    | 0.336 | **0.630** | 0.976 | 0.858 | **0.892** | 0.943 | 0.938 |
-| hybrid RRF                   | 0.315 | 0.609 | **0.983** | 0.845 | 0.875 | 0.940 | 0.938 |
+| retrieval-order (no ranking) | 0.294 | 0.529 | 0.910 | 0.733  | 0.727   | 0.839   | 0.925 |
+| lexical only (BM25)          | 0.333 | 0.604 | 0.971 | 0.861  | 0.864   | 0.933   | 0.942 |
+| semantic only (embeddings)   | 0.349 | 0.621 | 0.972 | 0.906  | 0.899   | 0.950   | **0.975** |
+| **hybrid linear (α=0.6)**    | 0.346 | **0.630** | 0.972 | **0.917** | **0.915** | **0.959** | **0.975** |
+| hybrid RRF                   | 0.342 | 0.614 | **0.974** | 0.910 | 0.894 | 0.954 | **0.975** |
+| ↳ minus the evidence prior   | 0.351 | 0.628 | 0.972 | 0.902  | 0.901   | 0.954   | 0.950 |
+
+The golden set started at 8 queries and 174 candidates. That was too few to separate an
+effect from noise, and it skewed biomedical and ML; the twelve added queries bring in
+physics, public health, a three-way cross-domain intersection, and two input modes the
+retrieval layer had never been scored on — a DataCite identifier and a second pasted
+abstract. Judgments are keyed by paper id rather than pool position, so rebuilding the
+pool cannot silently reassign a grade to a different paper.
 
 ### How to read these numbers
 
 **Recall@k has a ceiling below 1.0 here.** Most queries have more relevant papers than
 *k*, and Recall@k cannot exceed `min(k, |relevant|) / |relevant|`. On this set the
-ceilings are **R@5 ≤ 0.379, R@10 ≤ 0.675, R@20 ≤ 0.983**. So hybrid's 0.630 at k=10 is
-**93% of the best any ranking could do**, not 63% of some ideal. Seven of the eight
+ceilings are **R@5 ≤ 0.376, R@10 ≤ 0.669, R@20 ≤ 0.991**. So hybrid's 0.630 at k=10 is
+**94% of the best any ranking could do**, not 63% of some ideal. Fourteen of the twenty
 queries hit 100% of their ceiling at k=10. The evaluator reports the ceiling on every
 run so a correct number is not misread as a bad one.
 
@@ -311,17 +319,17 @@ is no top-k pooling bias and the "unjudged means irrelevant" assumption is doing
 hidden work. What these numbers do *not* say is how much of the wider literature the
 fan-out found — that would need judgments over papers never returned.
 
-**The honest read of the hybrid-vs-semantic comparison:** hybrid wins deeper in the
-list (R@10, NDCG@10), semantic wins at the very top (R@5, NDCG@5, MRR), and the gaps
-are ~0.01 on eight queries — inside the noise. The defensible claim is that *both
-clearly beat doing nothing* (+0.105 R@10, +0.181 NDCG@10 over retrieval order) and that
-**hybrid is the safer default because it degrades better**, not because it is
-significantly more accurate on this set. An α sweep (0.2–0.8, in the evaluator) puts
-the optimum at 0.6–0.7, which is where the default sits.
+**The honest read of the hybrid-vs-semantic comparison:** on 20 queries hybrid now
+leads semantic on every metric rather than trading wins with it, but by 0.01–0.02 —
+still small enough that the defensible claim is the same one as before. Both *clearly*
+beat doing nothing (+0.101 R@10, +0.188 NDCG@10 over retrieval order), and **hybrid is
+the safer default because it degrades better**, not because it is decisively more
+accurate. An α sweep (0.2–0.8, in the evaluator) puts the optimum at 0.5–0.6, which is
+where the default sits.
 
 ### What the evaluation caught
 
-Building the golden set found three real defects that no unit test would have:
+Building the golden set found four real defects that no unit test would have:
 
 1. **PubMed silently returned zero results for ordinary topic queries.** PubMed ANDs
    every term, so `"CRISPR prime editing efficiency in human cells"` matched nothing
@@ -339,20 +347,75 @@ Building the golden set found three real defects that no unit test would have:
    conflicting-DOI veto (added in Stage 1 to keep errata separate) was also splitting
    the bioRxiv and journal versions of one paper — visibly, at ranks 1 and 3 of a demo.
    The veto now makes an exception for preprint DOI prefixes when titles match exactly.
+4. **Records with nothing but a title were out-ranking real papers.** Both scorers
+   reward term density, and a bare Crossref title is maximally dense by construction —
+   every token it has is a query token. A record called simply *"Differential privacy"*
+   ranked **first** for "federated learning differential privacy medical imaging", with
+   the highest cosine in the candidate set, above a dozen papers that actually do
+   federated DP on medical images. See *The evidence prior* below.
+
+### The evidence prior, and why the 8-query set could not have found it
+
+Controlling for relevance grade, title-only records were ranking **15–31 percentile
+points above equally-relevant records that had abstracts — at every grade**:
+
+| grade | has abstract | title only | gap |
+|-------|--------------|------------|-----|
+| 3 | 62.6% (n=169) | 77.4% (n=45) | +14.8% |
+| 2 | 36.1% (n=73)  | 66.7% (n=16) | +30.6% |
+| 1 | 29.9% (n=51)  | 54.4% (n=9)  | +24.5% |
+| 0 | 14.7% (n=41)  | 30.8% (n=7)  | +16.2% |
+
+Same bias at every grade means a scoring artefact, not a quality difference. **The
+pooled means hid it completely**: title-only records are *more* relevant on average
+(mean grade 2.29 vs 2.11), because Crossref's stubs are often reviews. The first
+measurement said "title-only records rank higher and deserve to" — and only controlling
+for grade showed that was a coincidence covering a bug.
+
+The fix is a document prior, `L / (L + k)` on token count, applied after fusion. It is
+deliberately *not* a rule about missing abstracts: a two-sentence abstract carries more
+evidence than a bare title and less than a full one, and a continuous weight can say so
+where a boolean cannot.
+
+**`k` was chosen by a paired bootstrap over the 20 queries, not by taking the best cell
+of a sweep** — and that distinction changed the answer:
+
+| k  | ΔNDCG@10 | 95% CI | queries better/worse |
+|----|----------|--------|----------------------|
+| 1  | +0.002 | [−0.002, +0.005] | 5 / 3 |
+| **3** | **+0.014** | **[+0.004, +0.025]** | **10 / 3** |
+| 8  | +0.006 | [−0.012, +0.026] | 8 / 6 |
+| 20 | +0.005 | [−0.021, +0.035] | 8 / 6 |
+
+Only `k ∈ [2, 4]` improves with an interval that excludes zero. The *largest* apparent
+gain in the whole sweep was NDCG@5 **+0.038** at `k=20` — which looks like the winner
+until the interval comes back `[−0.011, +0.105]` on a 6–4 split. Picking that number
+would have been picking noise. The shipped effect is small, real, and reported as
+small: **NDCG@10 0.901 → 0.915, MRR 0.950 → 0.975**, with `federated-learning-privacy`
+going 0.651 → 0.717 and its MRR 0.500 → 1.000.
+
+The ablation ships as a row in the evaluation script, so the prior stays falsifiable.
 
 ### A measured idea that did not pay off
 
 BM25 is a bag of words, so "prime editing" is scored as two independent terms and a
 paper matching *editing* + *efficiency* + *CRISPR* + *human* can outrank one actually
 about prime editing. Indexing adjacent token pairs fixes exactly that query
-(NDCG@10 0.591 → 0.678) but **lowers the average** (0.892 → 0.870), because doubling
+(NDCG@10 **0.592 → 0.689**) but **lowers the average** (0.915 → 0.898), because doubling
 the term space dilutes unigram IDF everywhere else. It ships off by default, with the
 trade-off recorded in [`lexical.py`](backend/app/services/ranking/lexical.py) rather
 than quietly dropped.
 
+Re-measured on 20 queries, the conclusion survived the larger set — and `prime-editing`
+is still the worst query on the board at NDCG@10 0.592, for exactly this reason. It is
+the one place where the shipped default is knowingly the weaker choice for a specific
+query in exchange for the average.
+
 ### Known limitations
 
-- **Eight queries is a small set.** Differences under ~0.02 should not be trusted.
+- **Twenty queries is still a small set.** It is enough to bootstrap a confidence
+  interval, which is why every claimed improvement above carries one, but differences
+  under ~0.01 remain untrustworthy and a 95% interval on 20 paired samples is wide.
 - **BM25's IDF is local to the candidate set.** For a query like "prime editing" where
   every candidate mentions prime editing, the phrase carries almost no lexical weight.
   On a two-candidate set the lexical signal collapses to zero entirely (Okapi IDF is 0
@@ -360,7 +423,9 @@ than quietly dropped.
 - **Judgments are single-annotator**, assigned by reading each title and abstract
   against a documented rubric. There is no inter-annotator agreement figure.
 - **Papers with no abstract rank on title and keywords alone**, which is genuinely
-  weaker evidence — a known cost of Crossref's incomplete abstract coverage.
+  weaker evidence — a known cost of Crossref's incomplete abstract coverage. The
+  evidence prior corrects the *scoring* bias this caused; it cannot invent the missing
+  text, and such records are still ranked on less information than their neighbours.
 - The golden set is checked in ([`backend/eval/`](backend/eval/)) so the judgments can
   be audited: each entry carries its grade *and* the paper title.
 
@@ -541,68 +606,122 @@ run in microseconds, and each is a property that can be asserted:
 | **Overclaiming** | "the first", "proves", "cures" — when the abstract doesn't say so |
 | **Format** | the 2-3 sentences that were actually requested |
 
+### The blind spot these six rules could not cover
+
+Every rule above is lexical, and there is a class of fabrication that lexical rules
+provably cannot see. A **recombination** is a fluent claim assembled entirely from the
+abstract's own sentences that the abstract never actually makes — *"the editing
+efficiency was caused by the pegRNA design"* invents no number, no entity, and no
+reversed direction, and shares almost all its content words with the source.
+
+Measured against 934 such cases, the six rules together caught **zero**. Not a low
+rate — none.
+
+The textbook answer is an NLI model, which means a second model to ship and one model
+grading another. Instead the check reuses the embedder that is **already resident** for
+ranking: every summary sentence should be a compression of something the abstract
+says, so a sentence whose best alignment to any *contiguous window* of abstract
+sentences is poor is asserting something the source does not. A recombination has high
+vocabulary overlap and low sentence-level alignment, because it welds together claims
+from sentences that never touch.
+
+Two design decisions came out of measurement rather than taste:
+
+**Windows, not single sentences.** Summarizing is compression — one good summary
+sentence routinely condenses two or three consecutive abstract sentences — and scoring
+against each individually **rejected 44% of legitimate summaries**.
+
+**Advisory, not blocking.** The threshold trades detection against false alarms, and
+the synthetic benchmark was badly misleading about the price:
+
+| threshold | recombinations caught | *real* summaries cautioned |
+|---|---|---|
+| 0.50 | 61.3% | **5%** |
+| 0.55 | 75.3% | 10.6% |
+| 0.65 | 89.8% | 29.8% |
+| 0.70 | 94.6% | **43.6%** |
+
+On hand-built paraphrases 0.70 looked nearly free; against live generation it cautions
+two summaries in five. **A warning that fires that often is one readers learn to skip**,
+which would cost the signal entirely. So 0.50 ships, support failures are shown as a
+caution with the summary standing, and only the deterministic rules reject.
+
 ### Measured, including where it fails
 
-`python -m scripts.evaluate_grounding` — 148 real abstracts from the frozen pool,
-894 labelled cases, fully offline and deterministic.
+`python -m scripts.evaluate_grounding` — **332 real abstracts, 2618 labelled cases**,
+fully offline and deterministic.
 
 ```
 should be ACCEPTED
-  faithful                  148/148   100.0%
-  paraphrase                146/148    98.6%
+  faithful                  331/332    99.7%
+  paraphrase                328/332    98.8%
 
 should be REJECTED (one rule each)
-  fabricated number          47/47    100.0%
-  fabricated entity         148/148   100.0%
-  reversed direction         22/22    100.0%
-  overclaim                  85/85    100.0%
-  wrong paper               148/148   100.0%
+  fabricated number         114/114   100.0%
+  fabricated entity         332/332   100.0%
+  reversed direction         48/48    100.0%
+  overclaim                 194/194   100.0%
+  wrong paper               332/332   100.0%
 
-known blind spot
-  recombination               0/148     0.0%   ← 100% slip through
+recombination — built from the abstract's own sentences,
+so every lexical rule passes them
+  conflated_finding         111/194    57.2%
+  invented_causation        118/182    64.8%
+  invented_comparison       111/182    61.0%
+  scope_inflation           119/194    61.3%
+  swapped_roles             114/182    62.6%
+
+recall on designed cases   1020/1020  100.0%
+false-positive rate           5/664     0.8%
+recombination caught        573/934    61.3%
 ```
 
 **Read the last row, not the first five.** Each corruption in the middle block is a
 clean instance of exactly the failure mode one rule was written to catch, so 100%
-there confirms the rules fire — it is not evidence that real hallucinations get
-caught. The two rows that carry information:
+there confirms the rules fire — it is not evidence that real hallucinations get caught.
+The rows that carry information:
 
-- **False-positive rate: 0.7%** (2 of 296), measured on paraphrases reworded away from
-  the abstract's exact sentences. That is the real cost of the check — a checker that
-  rejects good summaries isn't "safe", it just degrades everything to extractive text.
-- **The blind spot is 100%.** A "recombination" case asserts a causal link the abstract
-  never makes, built entirely from the abstract's own vocabulary — no invented number,
-  no invented entity, no reversed direction. Every single one passes. The check is
-  **lexical, not inferential**, and catching these needs entailment, which is a model,
-  which brings back every problem above. This is measured and stated rather than left
-  for someone to discover.
+- **False-positive rate: 0.8%** (5 of 664), measured on paraphrases reworded away from
+  the abstract's exact sentences. That is the real cost — a checker that rejects good
+  summaries isn't "safe", it just degrades everything to extractive text.
+- **Recombinations: 0% → 61.3%.** Still the weakest row, and still the honest headline.
+  The check is a similarity threshold, not entailment: it cannot separate "A causes B"
+  from "B causes A" when both sentences discuss A and B together. Roughly two in five
+  recombinations still get through.
 
-There is a test (`test_the_check_is_documented_as_lexical_not_inferential`) that pins
-this limitation, so a future change claiming to fix it has to update the test.
+The attacks that produce that number are generated from **each abstract's own
+sentences** and live next to the checker in `attacks.py`, because a detection rate is
+only worth something if the attacks are honestly hard. An earlier formulaic straw-man
+version was replaced for exactly that reason.
 
 ### Measured against live generation
 
-`python -m scripts.evaluate_summaries --limit 20` — 20 real abstracts spanning every
-domain in the pool, caching bypassed, `ministral-8b-latest`.
+`python -m scripts.evaluate_summaries --limit 100 --quality` — **100 real abstracts**
+spanning every domain in the pool, caching bypassed, `ministral-8b-latest`.
 
 | outcome | n | share |
 |---|---|---|
-| grounded on first attempt | 14 | **70%** |
-| rescued by the correcting retry | 6 | 30% |
-| fell back to extractive | 0 | **0%** |
-| **generated text accepted** | 20 | **100%** |
+| grounded on first attempt | 78 | **78%** |
+| rescued by the correcting retry | 16 | 16% |
+| fell back to extractive | 6 | **6%** |
+| **generated text accepted** | 94 | **94%** |
 
-0.41 s per paper. The retry rescued every single failure, which is the strongest
-evidence that quoting the specific issues back beats re-sampling: none of the six
-needed a third attempt or a fallback.
+2.37 s per paper; 6 of the 100 accepted summaries carry a support caution.
+
+This replaces an earlier 20-paper run that reported 100% acceptance and a 0% fallback
+rate. **That number did not survive a five-fold larger sample** — at n=100 the retry
+rescues most failures but not all, and six papers reach the extractive fallback. The
+smaller figure is the trustworthy one.
 
 What the first attempts were rejected *for* is the actionable part — a pass rate says
 a model failed, this says how:
 
 ```
-overclaim                 4     "the first", "proves", where the abstract doesn't
-fabricated_entity         3     a method name the abstract never mentions
-contradicted_direction    1     an effect stated in the wrong direction
+fabricated_entity        11     a method name the abstract never mentions
+overclaim                 8     "the first", "proves", where the abstract doesn't
+low_overlap               7     drift toward a different paper
+unsupported_claim         3     a sentence the abstract does not back (advisory)
+fabricated_number         2     a figure that appears nowhere in the source
 ```
 
 ### Two thresholds and a model, all tuned by measurement
@@ -623,7 +742,10 @@ extractive text for no gain in safety whatsoever.
 
 **Model choice is not driven by the grounding numbers.** All three viable models
 (`ministral-3b/8b/14b-latest`) accepted 100% of generated text with 0% fallback, and
-first-attempt rates of 75/70/80% are inside the noise at n=20. The default is
+first-attempt rates of 75/70/80% are inside the noise at n=20. (That comparison was run
+at n=20 and has not been repeated at n=100, where the shipped model's acceptance turned
+out to be 94% rather than 100% — so treat it as "no model separated itself on a small
+sample", not as a current measurement of any of the three.) The default is
 `ministral-8b-latest` for its rate limit — 188 req/min covers a full result set, where
 14b's 30 req/min would throttle a 24-paper search.
 
@@ -674,19 +796,64 @@ abstract to check against.
 Provider errors, rate limits and timeouts all degrade the same way: a provider outage
 costs the user their summaries, not their search results.
 
+### Is the summary any *good*, though?
+
+Everything above answers "is this false". None of it answers "is this useful" —
+*"This paper studies proteins."* is perfectly grounded and every check passes it.
+
+There are no human reference summaries here, and writing a few hundred would encode one
+annotator's taste, so the metrics are intrinsic and **each is reported beside the same
+metric for two baselines on the same abstracts**. The baselines *are* the measurement:
+a coverage of 0.658 means nothing until lead-3 scores 0.721 on the same papers.
+
+`python -m scripts.evaluate_summaries --limit 100 --quality`, 94 papers:
+
+| metric | generated | lead-3 | extractive | reading |
+|---|---|---|---|---|
+| **coverage** | 0.658 | 0.721 | **0.730** | how much of the abstract survived |
+| **compression** | 0.428 | 0.425 | 0.448 | summary words ÷ abstract words |
+| **novelty** | **0.706** | 0.000 | 0.019 | share of bigrams not in the source |
+| **longest copied span** | **0.081** | 1.000 | 0.590 | longest verbatim run |
+| **lead bias** | **0.601** | 0.176 | 0.479 | where in the abstract it drew from |
+| **redundancy** | **0.556** | 0.574 | 0.593 | most similar pair of its own sentences |
+
+**The honest read: this is a trade, not a win.** The generated summary genuinely
+rewrites rather than copies (novelty 0.706 against the extractive baseline's 0.019, and
+it lifts no clause longer than 8% of itself) and it reads the *whole* abstract rather
+than its opening (lead bias 0.601 against lead-3's 0.176). It also carries **about 10%
+less of the abstract's content than simply taking three sentences**, at the same
+length. If all you want is coverage, the fallback that ships for free is better.
+
+Coverage is deliberately the mirror of the support check: support asks whether
+everything in the summary came from the abstract (precision), coverage asks how much of
+the abstract survived into the summary (recall). Together they bracket the two ways a
+summary fails — inventing and omitting.
+
+**A prompt fix aimed at the gap, which failed.** v2 asked only for "what was done and
+what was found", so a v3 asked for the question, the method *and* the finding, plus a
+rule against stopping after the background. Re-measured on 100 fresh papers it moved
+coverage by **nothing at all** — 0.658 to 0.658 — while compression rose 0.428 → 0.464
+and redundancy 0.556 → 0.597. The summaries got ~8% longer and carried exactly as much;
+lead bias got *worse* (0.601 → 0.569), so the added rule did not even buy the thing it
+named. v3 was reverted and the reasoning kept in `prompts.py` so it is not retried. The
+coverage gap is not a prompt problem — it is what a 2–3 sentence budget costs.
+
 ### Known limitations
 
-- **Lexical, not inferential** — quantified above. This is the big one.
+- **Lexical rules are still blind to two in five recombinations** — quantified above.
+  This is the big one, and the semantic check narrowed it rather than closing it.
 - **The corruption set is synthetic.** Real models do not hallucinate by uniformly
   resampling digits; recall on designed cases is an upper bound.
 - **Single provider implemented.** The `LLMProvider` protocol is one method, so
   adding OpenAI or a local model is a ~40-line adapter, but only Mistral is written.
-- **n=20 for the live numbers.** Enough to show the retry is doing real work and to
-  settle the threshold; not enough to separate three models whose first-attempt rates
-  differ by five points.
-- **Prose quality is unmeasured.** Everything above scores whether a summary is
-  *grounded*, not whether it is *good*. A grounded summary can still be a bland
-  restatement of the first sentence, and nothing here would catch that.
+- **n=100 for the live numbers**, one model, one sampling temperature. Enough to settle
+  the thresholds and to have overturned the earlier n=20 claim of 100% acceptance; not
+  enough to separate two models whose first-attempt rates differ by five points.
+- **The quality metrics are proxies, and reference-free.** A summary can score well on
+  all six and still be a bad summary; a genuinely excellent terse summary will score
+  low on coverage. They are reported as a comparison against baselines precisely
+  because the absolute values are not meaningful. None of them measure factual
+  correctness — that is what the grounding layer is for.
 
 ---
 
@@ -1043,13 +1210,14 @@ Coverage is concentrated where interviews probe:
 | Query classification | `tests/test_query_parser.py` |
 | Fan-out and graceful degradation | `tests/test_search_service.py` |
 | Retries, rate limits, timeouts | `tests/test_http_behaviour.py` |
-| Embedders, BM25, and the fusion strategies | `tests/test_ranking.py` |
+| Embedders, BM25, the fusion strategies, and the evidence prior | `tests/test_ranking.py` |
 | IR metrics, hand-computed from their definitions | `tests/test_ranking_evaluation.py` |
 | Entity patterns, label normalization, trust guards | `tests/test_entities.py` |
 | Cluster selection, labelling, and refusal to split | `tests/test_clustering.py` |
 | Embedding cache correctness and eviction | `tests/test_embedding_cache.py` |
 | Every grounding rule, and the limitation it cannot cover | `tests/test_grounding.py` |
 | Retry-on-failure, fallback, caching, provider errors | `tests/test_summarization.py` |
+| Quality metrics, each against a case where its value is known | `tests/test_summary_quality.py` |
 | BibTeX and RIS round-tripped through independent parsers | `tests/test_export.py` |
 | Export endpoints, the paper store, filename sanitizing | `tests/test_export_api.py` |
 

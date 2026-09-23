@@ -40,13 +40,17 @@ class BM25Scorer:
         """
         Args:
             bigrams: also index adjacent token pairs, so multi-word terms
-                match as units. Measured on the golden set: it fixes the
-                query it was built for (prime-editing NDCG@10 0.591 ->
-                0.678) but *lowers* the average (0.892 -> 0.870), because
-                doubling the term space dilutes unigram IDF everywhere
-                else. Off by default; kept because it is the right lever
-                for a phrase-heavy corpus and the trade-off is measured,
-                not assumed.
+                match as units. Measured on the 20-query golden set: it
+                fixes the query it was built for (prime-editing NDCG@10
+                0.592 -> 0.689) but *lowers* the average (0.915 -> 0.898),
+                because doubling the term space dilutes unigram IDF
+                everywhere else. Off by default; kept because it is the
+                right lever for a phrase-heavy corpus and the trade-off is
+                measured, not assumed.
+
+                The conclusion survived the golden set growing from 8
+                queries to 20, which is worth noting because most of the
+                other numbers in this project did not.
         """
         self._bigrams = bigrams
         self._corpus = [
