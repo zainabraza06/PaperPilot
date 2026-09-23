@@ -1,6 +1,6 @@
 import type { Paper } from '@/types/domain'
 
-import { ScoreBar, SourceBadges, cx, formatAuthors, formatDate } from './primitives'
+import { ScoreBar, SourceBadges, formatAuthors, formatDate } from './primitives'
 import { SummaryBlock } from './SummaryBlock'
 
 /**
@@ -47,7 +47,7 @@ export function PaperCard({
   return (
     <article
       data-selected={selected}
-      className={cx('card group animate-fade-in p-4 sm:p-5', selected && 'bg-accent-50/40')}
+      className="row group px-4 py-4 sm:px-6 sm:py-5"
     >
       <div className="flex gap-3 sm:gap-4">
         {selectionMode ? (
@@ -61,14 +61,14 @@ export function PaperCard({
         ) : (
           <span
             aria-hidden="true"
-            className="mt-0.5 hidden w-6 shrink-0 text-right text-sm font-medium tabular-nums text-faint sm:block"
+            className="mt-1 hidden w-7 shrink-0 text-right text-sm font-medium tabular-nums text-faint sm:block"
           >
             {rank}
           </span>
         )}
 
         <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold text-strong">
+          <h2 className="text-xl font-semibold text-strong">
             {/* The stretched control. It opens the detail view rather than
                 navigating away, because the detail view is where the
                 entities, the full summary and the citation live — the
@@ -85,7 +85,7 @@ export function PaperCard({
             </button>
           </h2>
 
-          <p className="mt-1 truncate text-base text-muted">{formatAuthors(authorNames)}</p>
+          <p className="mt-1.5 truncate text-sm text-muted">{formatAuthors(authorNames)}</p>
 
           <div className="meta-row mt-2 flex flex-wrap items-center text-xs text-muted">
             <SourceBadges sources={sources} />

@@ -1,5 +1,24 @@
 {
   "compilerOptions": {
+    /* Required, not optional. This is a *referenced* project (see
+       tsconfig.json), and without `composite` the build mode does not know
+       it is a check-only project: it looks for emitted outputs like
+       `src/App.js`, never finds them because `noEmit` is set, concludes the
+       project is stale, and rebuilds everything on every run. The
+       tsBuildInfoFile below is written but never trusted, so the
+       incremental cache is silently dead:
+
+         $ tsc -b --verbose        # before
+         Project 'tsconfig.app.json' is out of date because output file
+         'src/App.js' does not exist
+
+         $ tsc -b --verbose        # after
+         Project 'tsconfig.app.json' is up to date because newest input
+         'src/App.tsx' is older than output '...tsconfig.app.tsbuildinfo'
+
+       Nothing failed, which is why it survived: the only symptom was every
+       build paying full cost. */
+    "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "target": "es2023",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
@@ -15,6 +34,11 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+    /* Vite transpiles with esbuild, one file at a time, so anything that
+       needs whole-program knowledge to erase correctly is a runtime bug
+       waiting to happen. `verbatimModuleSyntax` covers the import/export
+       half of this; `isolatedModules` is what covers the rest. */
+    "isolatedModules": true,
 
     /* Strict mode, in full. The brief asks for it, and the parts beyond
        `strict` are the ones that actually catch bugs in this codebase:

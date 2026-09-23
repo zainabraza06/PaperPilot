@@ -95,6 +95,14 @@
 
   body {
     @apply bg-canvas text-body antialiased;
+    /* A single flat fill behind a page of white boxes is what reads as a
+       form. Two very wide, very low-opacity washes give the page a light
+       source, so surfaces sit *on* something instead of floating on grey.
+       Fixed attachment keeps them still while the results scroll. */
+    background-image:
+      radial-gradient(80rem 40rem at 12% -10%, rgb(var(--accent-500) / 0.05), transparent 60%),
+      radial-gradient(60rem 30rem at 100% 0%, rgb(var(--accent-400) / 0.04), transparent 55%);
+    background-attachment: fixed;
     font-feature-settings:
       'cv02','cv03','cv04','cv11','ss01','calt';
     /* Long titles break far more gracefully with the modern algorithms,
@@ -147,24 +155,43 @@
     @apply rounded-xl border border-line bg-surface;
   }
 
-  /* A result row. Flat at rest so a list of fifty reads as a list and not
-     as fifty competing boxes; it lifts only under the pointer. */
-  .card {
-    @apply relative rounded-xl border border-transparent bg-surface transition duration-200;
-    box-shadow: 0 0 0 1px rgb(var(--line));
-  }
-  .card:hover {
-    @apply shadow-raised;
+  /* Results live in ONE surface, divided by hairlines — not fifty separate
+     bordered cards. Fifty boxes each drawing their own outline is the thing
+     that made this read as a form: the eye has to re-enter a container on
+     every result instead of running down a single column. One panel with
+     dividers is how a list is supposed to look, and it is what every
+     current tool in this category does. */
+  .results-panel {
+    @apply overflow-hidden rounded-2xl bg-surface;
     box-shadow:
-      0 0 0 1px rgb(var(--line-strong)),
-      0 1px 2px rgb(var(--shadow) / 0.05),
-      0 4px 12px -2px rgb(var(--shadow) / 0.08);
+      0 0 0 1px rgb(var(--line)),
+      0 1px 2px rgb(var(--shadow) / 0.04),
+      0 8px 24px -8px rgb(var(--shadow) / 0.06);
   }
-  .card:has(:focus-visible) {
-    box-shadow: 0 0 0 1px rgb(var(--accent-400));
+
+  /* A row. No border of its own: the divider above it is the boundary, and
+     hover tints rather than lifts, because a row cannot lift out of a
+     panel it is inset into. */
+  .row {
+    @apply relative border-t border-line transition-colors duration-150;
   }
-  .card[data-selected='true'] {
-    box-shadow: 0 0 0 1.5px rgb(var(--accent-500));
+  .row:first-child {
+    @apply border-t-0;
+  }
+  .row:hover {
+    background-color: rgb(var(--sunken) / 0.6);
+  }
+  .row:has(:focus-visible) {
+    background-color: rgb(var(--accent-50) / 0.6);
+  }
+  /* The selected marker is a rail on the leading edge rather than a ring:
+     a ring inside a divided panel fights the dividers on both sides. */
+  .row[data-selected='true'] {
+    background-color: rgb(var(--accent-50) / 0.5);
+  }
+  .row[data-selected='true']::before {
+    content: '';
+    @apply absolute inset-y-0 start-0 w-[3px] bg-accent-500;
   }
 
   /* The accessible "click anywhere on the card" pattern: the *title link*

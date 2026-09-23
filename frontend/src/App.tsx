@@ -279,7 +279,7 @@ export default function App() {
                     </button>
                   ) : null}
 
-                  <div className="space-y-2.5">
+                  <div className="results-panel">
                     {visiblePapers.map((paper, index) => (
                       <PaperCard
                         key={paper.id}

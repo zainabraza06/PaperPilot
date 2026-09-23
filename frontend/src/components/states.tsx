@@ -22,11 +22,11 @@ import { Button } from './primitives'
 export function ResultSkeleton() {
   const widths = ['w-[92%]', 'w-[76%]', 'w-[88%]', 'w-[68%]']
   return (
-    <div className="space-y-2.5" aria-hidden="true">
+    <div className="results-panel" aria-hidden="true">
       {widths.map((width, index) => (
-        <div key={index} className="card p-4 sm:p-5">
+        <div key={index} className="row px-4 py-4 sm:px-6 sm:py-5">
           <div className="flex gap-3 sm:gap-4">
-            <div className="hidden w-6 shrink-0 sm:block">
+            <div className="hidden w-7 shrink-0 sm:block">
               <div className="skeleton ms-auto h-3.5 w-3" />
             </div>
             <div className="min-w-0 flex-1 space-y-2.5">
