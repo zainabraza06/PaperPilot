@@ -6,8 +6,8 @@ one query, one ranked list, AI summaries, one-click citation export.
 > **Status: all seven stages complete.** Multi-source retrieval, hybrid
 > ranking with measured Recall@k / NDCG@k, NER and topic clustering,
 > grounded summarization with a measured fact-checking layer, spec-correct
-> citation export, a React frontend verified by driving a real browser, and
-> Docker packaging.
+> citation export, a React frontend verified by driving a real browser and
+> audited against WCAG 2.2 AA, and Docker packaging.
 
 ---
 
@@ -16,11 +16,11 @@ one query, one ranked list, AI summaries, one-click citation export.
 | | |
 |---|---|
 | ![Results](docs/screenshots/04-results-light.png) | ![Results, dark](docs/screenshots/04-results-dark.png) |
-| **Ranked results** — source badges, relevance bars, AI summaries with their grounding verdict, extracted entities | **Dark mode**, respected from the OS preference before first paint |
+| **Ranked results** — one panel, provenance, relevance meters, AI summaries with their grounding verdict, extracted entities | **Dark mode**, respected from the OS preference before first paint |
 | ![Detail](docs/screenshots/08-detail-dark.png) | ![Pipeline](docs/screenshots/06-pipeline-status.png) |
 | **Paper detail** — entities highlighted inline in the abstract, and *why the first summary attempt was rejected* | **Pipeline transparency** — what every stage did, and which degraded |
 | ![Clusters](docs/screenshots/07-clusters.png) | ![Export](docs/screenshots/09-export-bar.png) |
-| **Sub-topic filters** — 39 papers narrowed to 23 in one click | **Bulk export** — select, pick a format, file downloads. No confirmation step |
+| **Sub-topic filters** — 59 papers narrowed to 45 in one click | **Bulk export** — select, pick a format, file downloads. No confirmation step |
 | ![Mobile](docs/screenshots/10-mobile.png) | ![Query hint](docs/screenshots/02-query-hint-light.png) |
 | **Responsive** at 390px, history as a drawer | **Live query-type detection**, classified server-side |
 
@@ -992,6 +992,27 @@ Beyond `strict: true`, this enables `noUncheckedIndexedAccess` and
 API is full of genuinely nullable fields, and they are what stops
 `paper.score.combined` from compiling when `score` may be null.
 
+**A config bug that never failed anything.** `tsconfig.app.json` and
+`tsconfig.node.json` are referenced projects, and neither set `composite: true`.
+Without it, build mode does not know they are check-only: it computes their expected
+outputs as emitted JavaScript, looks for `src/App.js`, never finds it because `noEmit`
+is set, and rebuilds from scratch every single time. The `tsBuildInfoFile` both
+configs specify was written and then never trusted.
+
+```
+$ tsc -b --verbose        # before
+Project 'tsconfig.app.json' is out of date because output file 'src/App.js' does not exist
+
+$ tsc -b --verbose        # after
+Project 'tsconfig.app.json' is up to date because newest input 'src/App.tsx' is older
+than output '.../tsconfig.app.tsbuildinfo'
+```
+
+Nothing ever failed, which is why it survived — the only symptom was every build
+paying full cost. `isolatedModules` was missing too: Vite transpiles with esbuild one
+file at a time, so anything needing whole-program knowledge to erase is a runtime bug
+waiting to happen.
+
 ### Every pipeline stage is visible
 
 The backend reports per-stage outcomes — sources, ranking, clustering, entities,
@@ -1006,6 +1027,54 @@ Summaries carry their provenance for the same reason: `AI`, `AI · corrected` an
 was rejected** — *"the summary states '12', which does not appear in the abstract"*.
 Rendering all three identically would throw away everything Stage 4 does.
 
+### The design system is tokens, and the palette is audited
+
+Colour is declared once as CSS custom properties and mapped into Tailwind by semantic
+name — `surface`/`sunken`, `strong`/`body`/`muted`/`faint`, `line`/`control`, `accent`.
+Components say `bg-surface`, not `bg-white dark:bg-slate-900`. The alternative puts a
+`dark:` variant on every colour utility in the app, and one forgotten variant is a
+panel that is white-on-white for half the users. That happened twice here before the
+tokens existed, and neither instance was visible without opening a dark screenshot.
+
+A palette is the one part of a redesign that can be checked rather than argued about,
+so [`scripts/contrast.mjs`](frontend/scripts/contrast.mjs) reads the real values out of
+`index.css` and scores every shipped pairing against WCAG 2.2 in both themes. It gates
+`npm run build`.
+
+```
+$ npm run contrast
+=== light ===
+  ok  10.95:1 (needs 4.5)  text-body on surface — summary text
+  ok   5.20:1 (needs 4.5)  text-muted on surface — authors and metadata
+  ok   3.25:1 (needs 3)    control on surface — input and checkbox borders
+  …
+All 48 pairings meet WCAG 2.2 AA.
+```
+
+It found three genuine failures the first time it ran: muted text at 4.46:1 on a
+recessed panel, and control borders at 1.5:1 where 1.4.11 asks for 3. The second
+produced a separate `--control` token, because a border that *identifies a control*
+owes 3:1 while a hairline separating two rows does not — and holding every divider to
+3:1 would put the whole page in cages.
+
+### The accessibility bug that a screenshot cannot show
+
+Every result card used to be `role="button"` with `tabIndex={0}`, wrapping a real link
+*and* a real checkbox. It looked and behaved correctly. It is also invalid —
+interactive elements must not nest — and it flattens the card for assistive
+technology: the heading, the link to the publisher and the select control all collapse
+into one announcement of *"button, open details for …"*.
+
+The accessible version of "click anywhere" is a **stretched link**: the title is the
+control, a transparent pseudo-element extends its hit area over the row, and the
+genuinely interactive children sit above it. Same pointer behaviour, correct
+semantics, one tab stop per control instead of two overlapping ones.
+
+Alongside it: a skip link (2.4.1), which the app never had; focus rings as outlines
+rather than ring-plus-offset, so a scroll container cannot clip them (2.4.11);
+`prefers-reduced-motion` honoured; and provenance encoded in colour *and* text, never
+colour alone (1.4.1).
+
 ### Verified by driving a real browser
 
 [`scripts/capture.mjs`](frontend/scripts/capture.mjs) runs Playwright against both
@@ -1014,15 +1083,17 @@ nothing. A frontend that typechecks and builds has proved nothing about whether 
 renders.
 
 ```
-=== light ===                          === dark ===
-  ok  respects the light OS preference   ok  respects the dark OS preference
-  ok  detects the query type             ok  3 sub-topic tabs rendered
-  ok  renders 39 result cards            ok  filtering narrows 39 papers to 23
-  ok  7 entities highlighted inline      ok  downloads paperpilot-2-references.bib
-  ok  Escape closes the modal            ok  exactly the 2 selected papers
-  ok  no console errors (0)              ok  no console errors (0)
+=== light ===                            === dark ===
+  ok  respects the light OS preference     ok  respects the dark OS preference
+  ok  detects the query type               ok  3 sub-topic tabs rendered
+  ok  renders 59 result cards              ok  filtering narrows 59 papers to 45
+  ok  26 entities highlighted inline       ok  downloads paperpilot-2-references.bib
+  ok  Escape closes the modal              ok  exactly the 2 selected papers
+  ok  no console errors (0)                ok  no console errors (0)
 === mobile ===
-  ok  results render at 390px            ok  no horizontal overflow
+  ok  results render at 390px              ok  no horizontal overflow
+
+All checks passed.        # 42 assertions across light, dark and mobile
 ```
 
 It also verifies the *downloaded file*, not just that a button was clickable: the
@@ -1057,7 +1128,16 @@ an architectural change, not a polish item, and it is not done.
 
 - **No component tests.** The Playwright run is end-to-end verification, not a unit
   suite; a broken component fails the whole capture rather than one assertion.
-- **No result virtualisation.** 39 cards is fine; 500 would not be.
+- **The harness checks presence, not appearance.** It asserts that things render, are
+  clickable and produce the right file — not that they *look* right. Four real
+  defects shipped past a green run and were found by opening the screenshots: metadata
+  separators that opened a wrapped line with a dangling middot, an export bar that
+  covered the last two results, a cluster rail clipped mid-word with no sign it
+  scrolled, and a detail modal that rendered **fully transparent** in dark mode. The
+  last one is the sharpest example: `[role="dialog"]` was still visible to Playwright,
+  just see-through. Asserting on computed background and geometry would close some of
+  this gap; it is not done.
+- **No result virtualisation.** 59 rows is fine; 500 would not be.
 - **arXiv rate-limits by IP** and the block outlasts its documented 1-request-per-3-seconds
   window. Heavy development traffic will trip it, and the per-process politeness
   limiter resets on every restart — which is exactly how it got tripped here. The
@@ -1085,6 +1165,7 @@ These are the things that break a naive implementation, and each one is pinned b
 | arXiv | Versioned ids (`2101.00001v3`) | Version stripped so the id is stable |
 | arXiv | 1 request / 3 seconds politeness policy | Per-source async rate limiter |
 | Crossref | Abstracts deposited as JATS XML | Tags stripped, entities decoded |
+| Crossref | Inline JATS (`<i>`, `<sub>`, `<scp>`) in **titles and journal names**, not just abstracts | Stripped at the boundary for every string field, not the two someone remembered |
 | Crossref | Ragged `date-parts`: `[[2021]]`, `[[2021,5]]`, `[[null]]` | Padded, with fallback across `issued` / `published-print` / `published-online` |
 | Crossref | Untitled stub records (datasets, components) | Dropped — nothing to rank or cite |
 | All | Missing abstracts and DOIs are normal, not exceptional | Optional throughout; deduplication falls back to titles |
@@ -1194,8 +1275,13 @@ overclaim.
 
 ```bash
 cd backend
-python -m pytest          # 396 tests
+python -m pytest          # 440 tests
 python -m ruff check app tests
+python -m mypy app scripts
+
+cd ../frontend
+npm run contrast          # WCAG audit of the palette, both themes
+npm run verify            # drive a real browser, 42 assertions
 ```
 
 Tests are offline and deterministic. Connector parsing runs against recorded upstream
@@ -1225,10 +1311,13 @@ Coverage is concentrated where interviews probe:
 | Cluster selection, labelling, and refusal to split | `tests/test_clustering.py` |
 | Embedding cache correctness and eviction | `tests/test_embedding_cache.py` |
 | Every grounding rule, and the limitation it cannot cover | `tests/test_grounding.py` |
+| The semantic support check, and the blocking/advisory split | `tests/test_support.py` |
 | Retry-on-failure, fallback, caching, provider errors | `tests/test_summarization.py` |
 | Quality metrics, each against a case where its value is known | `tests/test_summary_quality.py` |
 | BibTeX and RIS round-tripped through independent parsers | `tests/test_export.py` |
 | Export endpoints, the paper store, filename sanitizing | `tests/test_export_api.py` |
+| Palette contrast, both themes, gating the build | `frontend/scripts/contrast.mjs` |
+| Every user flow, in a real browser | `frontend/scripts/capture.mjs` |
 
 ---
 
@@ -1254,6 +1343,6 @@ Interactive docs at `/docs` when the server is running.
 **Enrichment** spaCy (SciSpacy-ready) · scikit-learn (Ward agglomerative)
 **Summarization** Mistral API via httpx · deterministic grounding check · SQLite cache
 **Export** BibTeX · RIS · APA 7th · Vancouver, validated against independent parsers
-**Frontend** React 19 · TypeScript (strict) · Tailwind · Vite · types generated from OpenAPI
-**Testing** pytest · pytest-asyncio · respx · bibtexparser · rispy · ruff · mypy (strict) · Playwright
+**Frontend** React 19 · TypeScript (strict) · Tailwind (semantic tokens) · Vite · types generated from OpenAPI
+**Testing** pytest · pytest-asyncio · respx · bibtexparser · rispy · ruff · mypy (strict) · Playwright · WCAG contrast audit
 **Packaging** Docker · docker compose · nginx
