@@ -25,11 +25,15 @@ import numpy as np
 
 from app.core.logging import get_logger
 from app.models.paper import Paper, RelevanceScore
-from app.services.ranking.document import document_text
+from app.services.ranking.document import document_text, tokenize
 from app.services.ranking.embeddings import Embedder
 from app.services.ranking.lexical import BM25Scorer
 
 logger = get_logger(__name__)
+
+#: Strength of the evidence prior; see ``_evidence_weights``. Measured on
+#: the 20-query golden set, not chosen by taste.
+EVIDENCE_PRIOR_K = 3.0
 
 
 class FusionStrategy(str, Enum):
@@ -60,6 +64,7 @@ class HybridRanker:
         alpha: float = 0.6,
         rrf_k: int = 60,
         bigrams: bool = False,
+        evidence_k: float = EVIDENCE_PRIOR_K,
     ) -> None:
         """
         Args:
@@ -70,14 +75,20 @@ class HybridRanker:
             bigrams: index adjacent token pairs in the lexical signal. See
                 ``BM25Scorer`` — measured, and it does not pay off on
                 average, so it is off.
+            evidence_k: strength of the document-length prior; ``0``
+                disables it, which is how the ablation row in
+                ``evaluate_ranking`` is produced.
         """
         if not 0.0 <= alpha <= 1.0:
             raise ValueError("alpha must be between 0 and 1")
+        if evidence_k < 0.0:
+            raise ValueError("evidence_k must not be negative")
         self._embedder = embedder
         self._strategy = strategy
         self._alpha = alpha
         self._rrf_k = rrf_k
         self._bigrams = bigrams
+        self._evidence_k = evidence_k
 
     @property
     def model_id(self) -> str:
@@ -102,7 +113,9 @@ class HybridRanker:
 
         semantic = self._semantic_scores(query, papers)
         lexical = BM25Scorer(papers, bigrams=self._bigrams).score(query)
-        combined = self._fuse(semantic, lexical)
+        combined = self._fuse(semantic, lexical) * _evidence_weights(
+            papers, self._evidence_k
+        )
 
         order = np.argsort(-combined, kind="stable")
         ranked: list[Paper] = []
@@ -149,6 +162,56 @@ class HybridRanker:
             case FusionStrategy.RRF:
                 return _minmax(_rrf(semantic, lexical, k=self._rrf_k))
         raise ValueError(f"unhandled strategy: {self._strategy}")
+
+
+def _evidence_weights(papers: Sequence[Paper], k: float) -> np.ndarray:
+    """Discount candidates that have too little text to have earned a score.
+
+    Both signals reward term density, and a record whose entire text is a
+    two-word title is maximally dense by construction: every token it has
+    is a query token. Crossref returns many such records — a bare title,
+    no abstract — and they were arriving at rank 1 ahead of full papers.
+    The clearest case: the query "federated learning differential privacy
+    medical imaging" put a title-only record called simply *Differential
+    privacy* first, with the highest cosine in the whole candidate set,
+    above a dozen papers that actually do federated DP on medical images.
+
+    The correction is a document prior, ``L / (L + k)``, on the token
+    count. It is deliberately not a rule about missing abstracts: a paper
+    with a two-sentence abstract has more evidence than a bare title and
+    less than a full one, and a continuous weight says that, where a
+    ``has_abstract`` flag cannot.
+
+    **What the golden set actually showed.** Controlling for relevance
+    grade, title-only records were ranking 15-31 percentile points above
+    equally-relevant records that had abstracts — at *every* grade, so it
+    was a scoring artefact rather than a real quality difference. (The
+    pooled means hid this: title-only records are more relevant on
+    average, grade 2.29 vs 2.11, because Crossref's stubs are often
+    reviews. That coincidence is why the bug survived the 8-query set.)
+
+    ``k`` was chosen by a paired bootstrap over the 20 queries, not by
+    taking the best cell in a sweep. Only ``k`` in [2, 4] gives an
+    improvement whose 95% interval excludes zero: at ``k=3``, NDCG@10
+    +0.014 [+0.004, +0.025], 10 queries better and 3 worse. The larger
+    apparent gains further out are noise — ``k=20`` scored NDCG@5 +0.038,
+    which looks like the winner until the interval comes back as
+    [-0.011, +0.105] on a 6-4 split. This is a small, real effect, and
+    reporting it as a large one would be dishonest.
+
+    The prior is applied to every fusion strategy, so the ablation rows
+    stay ablations of the system that actually ships.
+    """
+    if k <= 0.0 or not papers:
+        return np.ones(len(papers), dtype=np.float32)
+    # Tokenized a second time here rather than reusing the BM25 corpus:
+    # that corpus follows the bigram flag, which would silently double the
+    # lengths and change what k means. A few dozen candidates make the
+    # duplicated work irrelevant.
+    lengths = np.array(
+        [len(tokenize(document_text(paper))) for paper in papers], dtype=np.float32
+    )
+    return lengths / (lengths + k)
 
 
 def _minmax(scores: np.ndarray) -> np.ndarray:

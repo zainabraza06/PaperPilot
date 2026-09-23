@@ -314,3 +314,82 @@ async def test_arank_matches_rank() -> None:
     assert [p.id for p in await ranker.arank("prime editing", papers)] == [
         p.id for p in ranker.rank("prime editing", papers)
     ]
+
+
+# --- evidence prior -----------------------------------------------------
+
+
+def test_a_bare_title_does_not_outrank_a_full_paper_on_the_same_topic() -> None:
+    """The regression this prior exists for.
+
+    Crossref returns records that are nothing but a title. Both scorers
+    reward term density, and such a record is maximally dense by
+    construction - every token it has is a query token - so it was
+    arriving at rank 1 ahead of papers that actually cover the topic.
+    """
+    stub = make_paper(
+        "Differential privacy",
+        None,
+        paper_id="p-stub",
+    )
+    real = make_paper(
+        "Federated learning with differential privacy for medical imaging",
+        "We train a segmentation model across five hospitals under a "
+        "differential privacy budget, and report the accuracy cost of the "
+        "privacy guarantee on chest radiographs and on brain MRI.",
+        paper_id="p-real",
+    )
+    query = "federated learning differential privacy medical imaging"
+
+    without = HybridRanker(HashingEmbedder(), evidence_k=0.0).rank(query, [stub, real])
+    with_prior = HybridRanker(HashingEmbedder()).rank(query, [stub, real])
+
+    assert without[0].id == "p-stub", "precondition: the stub used to win"
+    assert with_prior[0].id == "p-real"
+
+
+def test_the_prior_is_continuous_rather_than_a_missing_abstract_flag() -> None:
+    """A thin abstract sits between a bare title and a full one.
+
+    This is the reason the prior is a length curve and not a
+    ``has_abstract`` branch: evidence comes in degrees.
+    """
+    from app.services.ranking.hybrid import _evidence_weights
+
+    bare = make_paper("quantum error correction", None)
+    thin = make_paper("quantum error correction", "We prove a threshold.")
+    full = make_paper(
+        "quantum error correction",
+        "We prove a threshold theorem for the surface code under "
+        "circuit-level depolarizing noise, and estimate the threshold "
+        "numerically with a minimum-weight matching decoder over lattices "
+        "of increasing distance.",
+    )
+    weights = _evidence_weights([bare, thin, full], 3.0)
+    assert weights[0] < weights[1] < weights[2] < 1.0
+
+
+def test_the_prior_leaves_full_records_essentially_untouched() -> None:
+    """It must discount stubs without reshuffling ordinary results."""
+    from app.services.ranking.hybrid import _evidence_weights
+
+    # ~180 content tokens, which is a typical abstract length.
+    papers = [make_paper(f"paper {n}", "one sentence of real text " * 45) for n in range(3)]
+    assert all(weight > 0.97 for weight in _evidence_weights(papers, 3.0))
+
+
+def test_the_prior_can_be_disabled_for_the_ablation() -> None:
+    papers = [make_paper("alpha", None), make_paper("alpha", "alpha " * 50)]
+    weights = _disabled_weights(papers)
+    assert list(weights) == [1.0, 1.0]
+
+
+def _disabled_weights(papers: list[Paper]) -> object:
+    from app.services.ranking.hybrid import _evidence_weights
+
+    return _evidence_weights(papers, 0.0)
+
+
+def test_a_negative_evidence_k_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        HybridRanker(HashingEmbedder(), evidence_k=-1.0)

@@ -115,6 +115,16 @@ def build_runs(embedder: Embedder, alpha: float, sweep: bool) -> list[tuple[str,
         )
     )
     runs.append(("hybrid RRF", HybridRanker(embedder, strategy=FusionStrategy.RRF)))
+    # The ablation for the document-length prior. Without this row the
+    # prior is an unfalsifiable claim.
+    runs.append(
+        (
+            "  ...minus the evidence prior",
+            HybridRanker(
+                embedder, strategy=FusionStrategy.LINEAR, alpha=alpha, evidence_k=0.0
+            ),
+        )
+    )
     if sweep:
         for value in (0.2, 0.3, 0.4, 0.5, 0.7, 0.8):
             runs.append(
