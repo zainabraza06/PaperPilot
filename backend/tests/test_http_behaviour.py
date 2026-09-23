@@ -176,3 +176,44 @@ async def test_timeouts_are_translated_not_leaked(fast_settings: Settings) -> No
     with pytest.raises(SourceTimeoutError):
         await source.search(query())
     await source.aclose()
+
+
+@respx.mock
+async def test_arxiv_resolves_its_own_datacite_doi_without_searching(
+    fast_settings: Settings,
+) -> None:
+    """An arXiv DOI carries the arXiv id; it should not be text-searched.
+
+    Since 2022 arXiv mints 10.48550/arXiv.<id> for every submission.
+    Crossref and PubMed legitimately hold no DataCite records, so if arXiv
+    also fails to resolve it, a perfectly valid DOI returns nothing at all
+    from any source - which is exactly what happened before this.
+    """
+    route = respx.get(url__startswith="https://export.arxiv.org/api/query").mock(
+        return_value=httpx.Response(200, text=load_fixture("arxiv_feed.xml"))
+    )
+
+    source = ArxivSource(fast_settings)
+    paper = await source.fetch_by_doi("10.48550/arXiv.1706.03762")
+    await source.aclose()
+
+    assert paper is not None
+    # Resolved by id_list, not by hunting for the DOI string in full text.
+    request_url = str(route.calls[0].request.url)
+    assert "id_list=1706.03762" in request_url
+    assert "search_query" not in request_url
+
+
+@respx.mock
+async def test_a_foreign_doi_still_falls_back_to_a_text_hunt(
+    fast_settings: Settings,
+) -> None:
+    route = respx.get(url__startswith="https://export.arxiv.org/api/query").mock(
+        return_value=httpx.Response(200, text=load_fixture("arxiv_feed.xml"))
+    )
+
+    source = ArxivSource(fast_settings)
+    await source.fetch_by_doi("10.1038/s41587-022-01234-5")
+    await source.aclose()
+
+    assert "search_query" in str(route.calls[0].request.url)

@@ -29,6 +29,9 @@ _ARXIV = "{http://arxiv.org/schemas/atom}"
 _ERROR_ID_MARKER = "arxiv.org/api/errors"
 _VERSION_SUFFIX = re.compile(r"v\d+$")
 _ABS_URL = re.compile(r"arxiv\.org/abs/(?P<id>.+)$")
+#: arXiv's own DataCite DOI, minted for every submission since 2022.
+#: The arXiv id is embedded in it, so it needs no search to resolve.
+_ARXIV_DOI = re.compile(r"^10\.48550/arxiv\.(?P<id>.+)$", re.IGNORECASE)
 
 
 class ArxivSource(BaseHttpSource):
@@ -65,7 +68,20 @@ class ArxivSource(BaseHttpSource):
         return self.parse_feed(response.text)
 
     async def fetch_by_doi(self, doi: str) -> Paper | None:
-        """arXiv has no DOI index; the closest equivalent is a full-text hunt."""
+        """Resolve a DOI, preferring arXiv's own DOIs over a text hunt.
+
+        Since 2022 arXiv mints a DataCite DOI for every submission, shaped
+        ``10.48550/arXiv.<id>``. That is not a foreign identifier to be
+        searched for — the arXiv id is sitting inside it — so it resolves
+        directly. Missing this meant a perfectly valid arXiv DOI returned
+        nothing at all from any source: Crossref and PubMed legitimately do
+        not hold DataCite records, and arXiv was searching its own full
+        text for a string that appears nowhere in it.
+        """
+        native = _ARXIV_DOI.match(doi)
+        if native:
+            return await self.fetch_by_arxiv_id(native.group("id"))
+
         response = await self._get(
             self.settings.arxiv_base_url,
             params={"search_query": f'all:"{doi}"', "max_results": 5},
