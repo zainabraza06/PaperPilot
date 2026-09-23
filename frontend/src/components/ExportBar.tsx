@@ -76,14 +76,14 @@ export function ExportBar({
               'mb-2 rounded-lg px-3 py-2 text-sm shadow-lg',
               notice.tone === 'ok'
                 ? 'bg-strong text-canvas'
-                : 'bg-rose-600 text-white',
+                : 'bg-critical text-canvas',
             )}
           >
             {notice.text}
           </div>
         ) : null}
 
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface/95 p-2.5 shadow-xl backdrop-blur">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface/95 p-2.5 shadow-float backdrop-blur-xl">
           <span className="px-1.5 text-sm font-semibold text-strong">
             {selectedIds.length} selected
           </span>
@@ -97,7 +97,10 @@ export function ExportBar({
                 type="button"
                 onClick={() => void handleExport(format)}
                 disabled={busy !== null}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-accent-500 disabled:opacity-50"
+                // Outline rather than four solid accent buttons in a row:
+                // they are four peers, and filling all of them makes the
+                // bar shout without telling anyone which to pick.
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-body ring-1 ring-inset ring-control transition hover:bg-accent-50 hover:text-accent-700 hover:ring-accent-400 disabled:opacity-50"
               >
                 {busy === format ? <Spinner className="h-3.5 w-3.5" /> : null}
                 {EXPORT_FORMAT_LABELS[format]}

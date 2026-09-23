@@ -185,6 +185,27 @@
     z-index: 2;
   }
 
+  /* A horizontally scrolling rail, with a fade at the trailing edge so a
+     clipped label reads as "more to the right" rather than as a bug.
+     The fade is only painted while the rail actually overflows. */
+  .rail {
+    @apply flex snap-x items-center gap-1 overflow-x-auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rail::-webkit-scrollbar { display: none; }
+  @supports (animation-timeline: scroll(x)) {
+    .rail {
+      mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+      animation: rail-fade linear both;
+      animation-timeline: scroll(self x);
+      animation-range: contain;
+    }
+  }
+  @keyframes rail-fade {
+    to { mask-image: linear-gradient(to right, transparent 0, #000 2rem); }
+  }
+
   .skeleton {
     @apply relative overflow-hidden rounded-md bg-sunken;
   }
@@ -196,10 +217,19 @@
   }
 
   /* Metadata separated by middots, without putting a dot in the markup —
-     screen readers would read every one of them aloud. */
-  .meta-row > * + *:not(.no-sep)::before {
+     screen readers would read every one of them aloud.
+     
+     The dot is an ::after on the *preceding* item rather than a ::before on
+     the following one. Both look identical on a single line, but this row
+     wraps on narrow screens, and a ::before puts the separator at the
+     *start* of the new line, which reads as a typo. A trailing dot at the
+     end of a wrapped line reads as "continues below". */
+  .meta-row > *:not(:last-child):not(.no-sep):not(:has(+ .no-sep))::after {
     content: '·';
-    @apply mx-2 text-faint;
+    @apply ms-2 text-faint;
+  }
+  .meta-row > *:not(:last-child):not(.no-sep) {
+    @apply me-2;
   }
 }
 

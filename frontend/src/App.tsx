@@ -220,7 +220,13 @@ export default function App() {
           </div>
         </div>
 
-        <main id="results" className="min-w-0 flex-1 space-y-4">
+        {/* The export bar is fixed to the bottom of the viewport, so the
+            list needs room to scroll clear of it — otherwise the last two
+            results sit permanently underneath it and cannot be reached. */}
+        <main
+          id="results"
+          className={cx('min-w-0 flex-1 space-y-4', selected.size > 0 && 'pb-24')}
+        >
           <SearchBar
             onSearch={handleSearch}
             busy={state.status === 'searching'}

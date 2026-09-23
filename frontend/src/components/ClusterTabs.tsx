@@ -34,7 +34,7 @@ export function ClusterTabs({
 
   return (
     <div
-      className="-mx-1 flex snap-x items-center gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="rail -mx-1 px-1 pb-1"
       role="tablist"
       aria-label="Filter by sub-topic"
     >
