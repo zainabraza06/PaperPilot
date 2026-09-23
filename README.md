@@ -634,17 +634,26 @@ against each individually **rejected 44% of legitimate summaries**.
 **Advisory, not blocking.** The threshold trades detection against false alarms, and
 the synthetic benchmark was badly misleading about the price:
 
-| threshold | recombinations caught | *real* summaries cautioned |
-|---|---|---|
-| 0.50 | 61.3% | **5%** |
-| 0.55 | 75.3% | 10.6% |
-| 0.65 | 89.8% | 29.8% |
-| 0.70 | 94.6% | **43.6%** |
+| threshold | recombinations caught | false alarms on *synthetic* paraphrase | cautions on *live* generation |
+|---|---|---|---|
+| **0.50** | **61.3%** | 0.0% | **6.4%** |
+| 0.55 | 71.3% | 0.2% | 10.6% |
+| 0.65 | 87.2% | 0.5% | 29.8% |
+| 0.70 | 92.6% | 0.6% | **43.6%** |
+| 0.75 | 97.6% | 1.1% | — |
 
-On hand-built paraphrases 0.70 looked nearly free; against live generation it cautions
-two summaries in five. **A warning that fires that often is one readers learn to skip**,
-which would cost the signal entirely. So 0.50 ships, support failures are shown as a
-caution with the summary standing, and only the deterministic rules reject.
+**Read the last two columns against each other.** They measure the same thing — how
+often the check cries wolf — and they disagree by two orders of magnitude. On hand-built
+paraphrases 0.70 costs 0.6% and looks nearly free, which is exactly what the synthetic
+benchmark on its own would have recommended. Against real generated text the same
+threshold cautions **43.6%**. The paraphrases were built by rewriting sentences; a model
+summarizing an abstract compresses three sentences into one, and no rewrite rule does
+that.
+
+**A warning that fires on two summaries in five is one readers learn to skip**, which
+would cost the signal entirely. So 0.50 ships — chosen on the live column, not the
+synthetic one — support failures are shown as a caution with the summary standing, and
+only the deterministic rules reject.
 
 ### Measured, including where it fails
 

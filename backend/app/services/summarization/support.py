@@ -54,24 +54,35 @@ _ABBREVIATIONS = ("et al.", "e.g.", "i.e.", "vs.", "cf.", "Fig.", "approx.", "ca
 #: A sentence whose best alignment to any source window is below this is
 #: not supported by the abstract.
 #:
-#: Chosen against *live generation*, not against synthetic paraphrase, and
-#: the two disagree sharply. On hand-built paraphrases the threshold looked
-#: nearly free — acceptance stayed above 98% all the way to 0.75. On real
-#: model output the same 0.70 flags 43% of perfectly good summaries,
-#: because a genuinely abstractive summary compresses harder than any
-#: rewrite rule does.
+#: Chosen against *live generation*, not against synthetic paraphrase.
 #:
-#:     support   recombinations flagged   real summaries cautioned
-#:       0.50            64.5%                     3.3%
-#:       0.55            75.3%                    16.7%
-#:       0.65            89.8%                    36.7%
-#:       0.70            94.6%                    43.3%
+#:              recombinations    false cautions on   cautions on *live*
+#:   support        flagged      synthetic paraphrase   generated text
+#:     0.50          61.3%              0.0%                 6.4%
+#:     0.55          71.3%              0.2%                10.6%
+#:     0.65          87.2%              0.5%                29.8%
+#:     0.70          92.6%              0.6%                43.6%
+#:     0.75          97.6%              1.1%                  --
 #:
-#: 0.50 is the operating point. A caution that fires on one summary in
-#: thirty is worth reading; one that fires on two in five is noise a reader
-#: learns to skip, which would cost the signal entirely. Two thirds of
-#: recombinations flagged at that price is the trade, and it is made
-#: against a baseline where none of them were caught at all.
+#: **Read the last two columns against each other.** They are measuring the
+#: same thing - how often the check cries wolf - and they disagree by two
+#: orders of magnitude. On hand-built paraphrases 0.70 costs 0.6% and looks
+#: nearly free, which is what the synthetic benchmark alone would have
+#: recommended. Against real generated text the same threshold cautions
+#: 43.6%. The paraphrases were built by rewriting sentences; a model
+#: summarizing an abstract compresses three sentences into one, and no
+#: rewrite rule does that.
+#:
+#: So the operating point is 0.50, chosen on the live column. A caution
+#: that fires on one summary in sixteen is worth reading; one that fires on
+#: two in five is noise a reader learns to skip, which would cost the
+#: signal entirely. Three fifths of recombinations flagged at that price is
+#: the trade, and it is made against a baseline where none of them were
+#: caught at all.
+#:
+#: (Synthetic numbers: 934 attacks and 664 paraphrases over 332 abstracts,
+#: ``scripts/evaluate_grounding.py --sweep-support``. Live numbers: 94
+#: generated summaries, ``scripts/evaluate_summaries.py --sweep-support``.)
 _MIN_SUPPORT = 0.50
 
 #: Sentences shorter than this carry no claim worth checking ("We show

@@ -60,13 +60,17 @@ class IssueSeverity(str, Enum):
     """Whether an issue rejects a summary or merely annotates it.
 
     The split is earned by measurement, not taste. The lexical rules have a
-    0.7% false-positive rate, so a summary that trips one is almost
-    certainly wrong and replacing it is right. The semantic support check
-    rejects roughly a quarter of *legitimate* model summaries, because a
-    genuinely abstractive summary and a recombined claim look much alike to
-    a similarity threshold. Blocking on a signal that noisy would destroy
-    more good summaries than it saves bad ones — so it annotates instead,
-    and the reader is told which sentence to look at twice.
+    0.8% false-positive rate, so a summary that trips one is almost
+    certainly wrong and replacing it is right.
+
+    The semantic support check is far noisier, because a genuinely
+    abstractive summary and a recombined claim look much alike to a
+    similarity threshold. Measured against live generation on 94 papers, a
+    threshold strict enough to catch most recombinations (0.70) cautions
+    **43.6%** of perfectly good summaries; the shipped 0.50 cautions 5% and
+    catches 61%. Blocking on a signal that noisy would destroy more good
+    summaries than it saves bad ones — so it annotates instead, and the
+    reader is told which sentence to look at twice.
     """
 
     #: Rejects the summary and triggers a regeneration.

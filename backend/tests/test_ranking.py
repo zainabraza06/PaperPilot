@@ -379,15 +379,10 @@ def test_the_prior_leaves_full_records_essentially_untouched() -> None:
 
 
 def test_the_prior_can_be_disabled_for_the_ablation() -> None:
-    papers = [make_paper("alpha", None), make_paper("alpha", "alpha " * 50)]
-    weights = _disabled_weights(papers)
-    assert list(weights) == [1.0, 1.0]
-
-
-def _disabled_weights(papers: list[Paper]) -> object:
     from app.services.ranking.hybrid import _evidence_weights
 
-    return _evidence_weights(papers, 0.0)
+    papers = [make_paper("alpha", None), make_paper("alpha", "alpha " * 50)]
+    assert list(_evidence_weights(papers, 0.0)) == [1.0, 1.0]
 
 
 def test_a_negative_evidence_k_is_rejected() -> None:

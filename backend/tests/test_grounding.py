@@ -209,15 +209,21 @@ def test_the_overlap_threshold_is_configurable() -> None:
     assert IssueKind.LOW_OVERLAP not in {issue.kind for issue in lenient.issues}
 
 
-def test_the_check_is_documented_as_lexical_not_inferential(
+def test_the_lexical_rules_alone_are_blind_to_recombination(
     checker: GroundingChecker,
 ) -> None:
-    """Pins the known limitation so it cannot be forgotten or overclaimed.
+    """Pins the limitation these six rules have, so it is never overclaimed.
 
     A summary built entirely from the abstract's own vocabulary, asserting
-    something the abstract never said, passes. Catching this needs
-    entailment. The limitation is real, documented, and tested for so that
-    a future change which claims to fix it has to update this test.
+    something the abstract never said, passes every rule in this module.
+    Measured over 934 such attacks, the lexical rules caught zero.
+
+    This is scoped to the *lexical* checker on purpose. The shipped
+    configuration attaches a semantic support check that catches ~61% of
+    these and is exercised in ``tests/test_support.py``; it is injected
+    rather than built in, so this module stays testable with no model
+    loaded. Neither closes the gap — the support check is a similarity
+    threshold, not entailment.
     """
     misleading = (
         "PE3 increased editing efficiency in T cells to 42%, and pegRNAs caused "
