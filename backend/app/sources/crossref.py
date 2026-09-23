@@ -219,14 +219,33 @@ class CrossrefSource(BaseHttpSource):
 
 
 def _first_string(value: Any) -> str | None:
-    """Crossref returns most single-valued text fields as arrays."""
-    if isinstance(value, list):
-        for entry in value:
-            if isinstance(entry, str) and entry.strip():
-                return collapse_whitespace(entry)
-        return None
-    if isinstance(value, str):
-        return collapse_whitespace(value)
+    """Crossref returns most single-valued text fields as arrays.
+
+    Markup is stripped here rather than at each call site because *every*
+    text field Crossref deposits can carry inline JATS — publishers send
+    ``<i>``, ``<sub>``, ``<sup>`` and ``<scp>`` in titles and journal names
+    as readily as in abstracts.
+
+    Leaving it in was visibly wrong in three places at once, which is why
+    it is handled once at the boundary:
+
+    * The frontend escapes it, so a reader saw a literal
+      ``Modeling <i>FGFR2</i> -Linked Craniosynostosis``.
+    * It **broke deduplication.** The title fallback key folds non-alphanumerics
+      to spaces, so the tags survived as the tokens ``i``/``sub``, and the
+      Crossref copy of a paper stopped matching the PubMed copy of the same
+      paper — the exact case that fallback exists for.
+    * It reached BibTeX and RIS export, where it is not valid in either.
+    """
+    entries = value if isinstance(value, list) else [value]
+    for entry in entries:
+        if not isinstance(entry, str):
+            continue
+        # strip_markup collapses whitespace itself, and returns None for a
+        # value that was nothing but tags.
+        cleaned = strip_markup(entry)
+        if cleaned:
+            return cleaned
     return None
 
 
