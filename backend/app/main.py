@@ -31,6 +31,7 @@ from app.services.search_service import SearchService
 from app.services.summarization.grounding import GroundingChecker
 from app.services.summarization.provider import build_provider
 from app.services.summarization.summarizer import PaperSummarizer
+from app.services.summarization.support import SemanticSupportChecker
 from app.sources.registry import SourceRegistry
 from app.storage.paper_store import PaperStore
 from app.storage.summary_cache import SummaryCache
@@ -55,7 +56,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     extractor = await _build_entity_extractor(settings)
     cache = _build_summary_cache(settings)
-    summarizer = _build_summarizer(settings, cache)
+    summarizer = _build_summarizer(settings, cache, embedder)
     paper_store = (
         PaperStore(settings.paper_store_path) if settings.paper_store_path else None
     )
@@ -138,7 +139,9 @@ def _build_summary_cache(settings: Settings) -> SummaryCache | None:
 
 
 def _build_summarizer(
-    settings: Settings, cache: SummaryCache | None
+    settings: Settings,
+    cache: SummaryCache | None,
+    embedder: CachedEmbedder | None = None,
 ) -> PaperSummarizer | None:
     """Construct the summarizer.
 
@@ -152,9 +155,18 @@ def _build_summarizer(
     provider = build_provider(
         settings.llm_provider, settings.mistral_api_key, settings.summary_model
     )
+    # The support check reuses the embedder that ranking and clustering
+    # already loaded rather than adding a second model to the process.
+    support = (
+        SemanticSupportChecker(embedder, min_support=settings.grounding_min_support)
+        if embedder is not None and settings.grounding_min_support > 0
+        else None
+    )
     return PaperSummarizer(
         provider,
-        checker=GroundingChecker(min_overlap=settings.grounding_min_overlap),
+        checker=GroundingChecker(
+            min_overlap=settings.grounding_min_overlap, support=support
+        ),
         cache=cache,
         max_concurrent=settings.summary_max_concurrent,
         max_attempts=settings.summary_max_attempts,

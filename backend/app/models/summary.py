@@ -48,17 +48,41 @@ class IssueKind(str, Enum):
     CONTRADICTED_DIRECTION = "contradicted_direction"
     #: A novelty or certainty claim the abstract does not make.
     OVERCLAIM = "overclaim"
+    #: A sentence no single abstract sentence supports, even though every
+    #: word in it came from the abstract. This is the recombination case
+    #: the lexical rules provably cannot see.
+    UNSUPPORTED_CLAIM = "unsupported_claim"
     #: Not the 2-3 sentences the prompt asked for.
     FORMAT = "format"
 
 
+class IssueSeverity(str, Enum):
+    """Whether an issue rejects a summary or merely annotates it.
+
+    The split is earned by measurement, not taste. The lexical rules have a
+    0.7% false-positive rate, so a summary that trips one is almost
+    certainly wrong and replacing it is right. The semantic support check
+    rejects roughly a quarter of *legitimate* model summaries, because a
+    genuinely abstractive summary and a recombined claim look much alike to
+    a similarity threshold. Blocking on a signal that noisy would destroy
+    more good summaries than it saves bad ones — so it annotates instead,
+    and the reader is told which sentence to look at twice.
+    """
+
+    #: Rejects the summary and triggers a regeneration.
+    BLOCKING = "blocking"
+    #: Shown beside an accepted summary as a caution.
+    ADVISORY = "advisory"
+
+
 class GroundingIssue(ApiModel):
-    """One specific, located reason a summary was not accepted."""
+    """One specific, located problem found in a summary."""
 
     model_config = ConfigDict(frozen=True)
 
     kind: IssueKind
     detail: str = Field(description="Human-readable explanation, safe to show a user.")
+    severity: IssueSeverity = IssueSeverity.BLOCKING
     span: str | None = Field(
         default=None, description="The offending text from the summary, if localizable."
     )
@@ -71,6 +95,16 @@ class GroundingVerdict(ApiModel):
     issues: list[GroundingIssue] = Field(default_factory=list)
     #: Share of the summary's content words that also occur in the abstract.
     overlap: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    @property
+    def blocking(self) -> list[GroundingIssue]:
+        """Issues that reject the summary outright."""
+        return [i for i in self.issues if i.severity is IssueSeverity.BLOCKING]
+
+    @property
+    def advisories(self) -> list[GroundingIssue]:
+        """Cautions worth showing a reader beside an accepted summary."""
+        return [i for i in self.issues if i.severity is IssueSeverity.ADVISORY]
 
     @property
     def passed(self) -> bool:

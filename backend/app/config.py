@@ -138,6 +138,17 @@ class Settings(BaseSettings):
             "later. Empty disables storage, and with it citation export."
         ),
     )
+    grounding_min_support: float = Field(
+        default=0.50,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum cosine similarity between a summary sentence and its best "
+            "matching abstract sentence. This is the only non-lexical grounding "
+            "rule and the only one that can see a recombination - a fluent claim "
+            "built from the abstract's own words. Set 0 to disable it."
+        ),
+    )
     summary_cache_path: str = Field(
         default="data/paperpilot.db",
         description="SQLite file for cached summaries. Empty disables caching.",

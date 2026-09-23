@@ -45,15 +45,19 @@ import json
 import random
 import re
 import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
 from typing import NamedTuple
 
+from app.config import get_settings
 from app.models.paper import Paper
 from app.models.summary import IssueKind
-from app.services.ranking.document import tokenize
+from app.services.ranking.cache import CachedEmbedder
+from app.services.ranking.embeddings import build_embedder
+from app.services.summarization.attacks import build_attacks
 from app.services.summarization.extractive import ExtractiveSummarizer
 from app.services.summarization.grounding import GroundingChecker
+from app.services.summarization.support import SemanticSupportChecker
 
 EVAL_DIR = Path(__file__).resolve().parent.parent / "eval"
 SEED = 20240905
@@ -199,18 +203,17 @@ def build_cases(papers: list[Paper]) -> list[Case]:
         if paraphrase != faithful:
             cases.append(Case(paper.id, paraphrase, abstract, None, "paraphrase"))
 
-        # 7. An unsupported claim assembled from the abstract's own words.
-        #    Expected to slip through - this is the documented blind spot.
-        recombined = _recombine(abstract)
-        if recombined:
+        # 7. Claims assembled from the abstract's own sentences. Every
+        #    lexical rule passes these by construction, so they isolate
+        #    exactly what the semantic support check is for.
+        for attack in build_attacks(abstract, rng):
             cases.append(
                 Case(
                     paper.id,
-                    recombined,
+                    attack.text,
                     abstract,
-                    IssueKind.LOW_OVERLAP,
-                    "recombination",
-                    out_of_scope=True,
+                    IssueKind.UNSUPPORTED_CLAIM,
+                    f"recombination: {attack.family}",
                 )
             )
 
@@ -229,22 +232,6 @@ def _paraphrase(summary: str) -> str:
     return ". ".join(sentences).rstrip(".") + "."
 
 
-def _recombine(abstract: str) -> str | None:
-    """Assert a causal link the abstract never makes, in its own vocabulary.
-
-    No fabricated number, no invented entity, no reversed direction word,
-    and high vocabulary overlap - so every rule the checker has passes it.
-    That is the point: it measures what lexical checking cannot see.
-    """
-    terms = [token for token in tokenize(abstract) if len(token) > 5]
-    if len(terms) < 4:
-        return None
-    counts = Counter(terms)
-    common = [term for term, _ in counts.most_common(4)]
-    return (
-        f"The {common[0]} was caused by {common[1]}, and {common[2]} "
-        f"was therefore required for {common[3]}."
-    )
 
 
 def _flip_direction(summary: str, abstract: str) -> str | None:
@@ -289,6 +276,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--show-misses", action="store_true", help="Print undetected cases")
     parser.add_argument("--min-overlap", type=float, default=None, help="Override the threshold")
+    parser.add_argument(
+        "--no-support",
+        action="store_true",
+        help="Disable the semantic support check, to measure the lexical rules alone",
+    )
+    parser.add_argument(
+        "--sweep-support",
+        action="store_true",
+        help="Score several support thresholds and print the trade-off",
+    )
     return parser.parse_args(argv)
 
 
@@ -297,13 +294,24 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args(argv)
 
+    settings = get_settings()
     papers = load_papers()
     cases = build_cases(papers)
-    checker = (
-        GroundingChecker(min_overlap=args.min_overlap)
-        if args.min_overlap is not None
-        else GroundingChecker()
-    )
+
+    support = None
+    if not args.no_support:
+        # Reuses the embedder the app already loads; no second model.
+        support = SemanticSupportChecker(
+            CachedEmbedder(build_embedder(settings.embedding_model), capacity=200_000)
+        )
+
+    overlap = args.min_overlap if args.min_overlap is not None else settings.grounding_min_overlap
+
+    if args.sweep_support:
+        _sweep(cases, overlap)
+        return 0
+
+    checker = GroundingChecker(min_overlap=overlap, support=support)
     tallies = evaluate(cases, checker)
 
     print(f"abstracts : {len(papers)}")
@@ -315,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
     positives = ("faithful", "paraphrase")
     designed = ("fabricated number", "fabricated entity", "reversed direction",
                 "overclaim", "wrong paper")
+    recombination = tuple(sorted({c.label for c in cases if c.label.startswith("recombination")}))
 
     print("should be ACCEPTED:")
     for label in positives:
@@ -322,14 +331,19 @@ def main(argv: list[str] | None = None) -> int:
     print("\nshould be REJECTED (one rule each):")
     for label in designed:
         _print_row(label, tallies)
-    print("\nknown blind spot (lexical checking cannot see these):")
-    _print_row("recombination", tallies)
+    print("\nrecombination - built from the abstract's own sentences, so every")
+    print("lexical rule passes them. Only the support check can see these:")
+    for label in recombination:
+        _print_row(label, tallies)
 
     caught = sum(tallies.get(label, {}).get("caught", 0) for label in designed)
     total = sum(tallies.get(label, {}).get("total", 0) for label in designed)
     accepted = sum(tallies.get(label, {}).get("caught", 0) for label in positives)
     positive_total = sum(tallies.get(label, {}).get("total", 0) for label in positives)
-    blind = tallies.get("recombination", {"total": 0, "caught": 0})
+    blind = {
+        "total": sum(tallies.get(label, {}).get("total", 0) for label in recombination),
+        "caught": sum(tallies.get(label, {}).get("caught", 0) for label in recombination),
+    }
 
     print("\n" + "-" * 52)
     print(f"{'recall on designed cases':<26} {caught:>4}/{total:<5} {caught / max(total, 1):>6.1%}")
@@ -339,9 +353,9 @@ def main(argv: list[str] | None = None) -> int:
         f"{(positive_total - accepted) / max(positive_total, 1):>6.1%}"
     )
     print(
-        f"{'blind spot slips through':<26} "
-        f"{blind['total'] - blind['caught']:>4}/{blind['total']:<5} "
-        f"{(blind['total'] - blind['caught']) / max(blind['total'], 1):>6.1%}"
+        f"{'recombination caught':<26} "
+        f"{blind['caught']:>4}/{blind['total']:<5} "
+        f"{blind['caught'] / max(blind['total'], 1):>6.1%}"
     )
 
     if args.show_misses:
@@ -353,6 +367,51 @@ def main(argv: list[str] | None = None) -> int:
             if case.expected not in kinds:
                 print(f"  [{case.label}] {case.summary[:110]}")
     return 0
+
+
+def _sweep(cases: list[Case], overlap: float) -> None:
+    """Score several support thresholds, so the default is a measured choice.
+
+    The trade-off is the whole story: raising the threshold catches more
+    recombinations and rejects more honest paraphrase. Printing both
+    columns is what makes the chosen value defensible rather than tuned to
+    whichever number looked best.
+    """
+    from app.config import get_settings
+
+    embedder = CachedEmbedder(build_embedder(get_settings().embedding_model), capacity=200_000)
+    recombination = tuple(sorted({c.label for c in cases if c.label.startswith("recombination")}))
+
+    # Acceptance no longer moves with this threshold - support issues are
+    # advisory, so they never block. What moves is how often a legitimate
+    # summary gets an unnecessary caution, which is the real cost now.
+    print(f"{'support':>8} {'recombination flagged':>22} {'false cautions':>16}")
+    print("-" * 50)
+    for threshold in (0.45, 0.50, 0.55, 0.60, 0.62, 0.65, 0.70, 0.75):
+        checker = GroundingChecker(
+            min_overlap=overlap,
+            support=SemanticSupportChecker(embedder, min_support=threshold),
+        )
+        tallies = evaluate(cases, checker)
+
+        caught = sum(tallies.get(name, {}).get("caught", 0) for name in recombination)
+        total = sum(tallies.get(name, {}).get("total", 0) for name in recombination)
+
+        # A caution on a summary that is actually faithful is the false
+        # positive that matters, so it is counted directly.
+        legitimate = [c for c in cases if c.expected is None]
+        cautioned = sum(
+            1
+            for case in legitimate
+            if any(
+                issue.kind is IssueKind.UNSUPPORTED_CLAIM
+                for issue in checker.check(case.summary, case.abstract).issues
+            )
+        )
+        print(
+            f"{threshold:>8.2f} {caught / max(total, 1):>21.1%} "
+            f"{cautioned / max(len(legitimate), 1):>15.1%}"
+        )
 
 
 if __name__ == "__main__":

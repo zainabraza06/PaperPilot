@@ -46,8 +46,10 @@ from app.models.summary import (
     GroundingStatus,
     GroundingVerdict,
     IssueKind,
+    IssueSeverity,
 )
 from app.services.ranking.document import STOPWORDS
+from app.services.summarization.support import SemanticSupportChecker
 
 # Matches 42, 42.5, 1,200, 42%, 3x — the shapes that carry claims.
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)*\s*%?")
@@ -114,9 +116,20 @@ class GroundingChecker:
         *,
         min_overlap: float = _MIN_OVERLAP,
         max_sentences: int = _MAX_SENTENCES,
+        support: SemanticSupportChecker | None = None,
     ) -> None:
+        """
+        Args:
+            support: optional sentence-level support check. Injected rather
+                than constructed here so the lexical rules stay testable
+                with no model loaded, and so the embedder that is already
+                resident is reused instead of a second one being created.
+                Without it the checker is purely lexical and carries the
+                documented recombination blind spot.
+        """
         self._min_overlap = min_overlap
         self._max_sentences = max_sentences
+        self._support = support
 
     def check(self, summary: str, abstract: str | None) -> GroundingVerdict:
         """Return a verdict, with one issue per distinct problem found.
@@ -147,12 +160,40 @@ class GroundingChecker:
         overlap, overlap_issue = self._check_overlap(summary, abstract)
         if overlap_issue:
             issues.append(overlap_issue)
+        issues.extend(self._check_support(summary, abstract))
 
+        # Only a blocking issue changes the verdict. An advisory travels
+        # with an accepted summary rather than replacing it.
+        blocking = any(issue.severity is IssueSeverity.BLOCKING for issue in issues)
         return GroundingVerdict(
-            status=GroundingStatus.UNGROUNDED if issues else GroundingStatus.GROUNDED,
+            status=GroundingStatus.UNGROUNDED if blocking else GroundingStatus.GROUNDED,
             issues=issues,
             overlap=overlap,
         )
+
+    def _check_support(self, summary: str, abstract: str) -> list[GroundingIssue]:
+        """Every sentence should paraphrase something the abstract says.
+
+        The only non-lexical rule. A recombination passes all the others by
+        construction - it invents no number, names no absent entity, and
+        reuses the source vocabulary - so this is what stands between the
+        checker and a fluent claim the paper never made.
+        """
+        if self._support is None:
+            return []
+        return [
+            GroundingIssue(
+                kind=IssueKind.UNSUPPORTED_CLAIM,
+                severity=IssueSeverity.ADVISORY,
+                detail=(
+                    f"no sentence in the abstract supports this claim "
+                    f"(best match {failure.best_support:.0%}, needs "
+                    f"{self._support.min_support:.0%})"
+                ),
+                span=failure.text,
+            )
+            for failure in self._support.unsupported(summary, abstract)
+        ]
 
     # --- individual checks -------------------------------------------------
 
