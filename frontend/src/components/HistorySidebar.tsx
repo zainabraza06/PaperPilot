@@ -63,7 +63,7 @@ export function HistorySidebar({
                   className={cx(
                     'w-full rounded-lg px-2.5 py-2 pr-7 text-left transition',
                     active
-                      ? 'bg-accent-50'
+                      ? 'bg-accent-100/50'
                       : 'hover:bg-sunken',
                   )}
                 >
