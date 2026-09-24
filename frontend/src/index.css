@@ -15,30 +15,30 @@
   :root {
     color-scheme: light;
 
-    --canvas: 248 248 246;
+    --canvas: 250 250 250;
     --surface: 255 255 255;
     --raised: 255 255 255;
-    --sunken: 246 246 243;
+    --sunken: 244 244 245;
 
-    --text-strong: 23 23 26;
-    --text-body: 60 60 66;
-    --text-muted: 108 108 117;
-    --text-faint: 148 148 158;
+    --text-strong: 9 9 11;
+    --text-body: 39 39 42;
+    --text-muted: 82 82 91;
+    --text-faint: 161 161 170;
 
-    --line: 232 232 228;
-    --line-strong: 214 214 209;
+    --line: 228 228 231;
+    --line-strong: 212 212 216;
     /* Borders that *identify a control* (inputs, checkboxes) rather than
        merely separate content — held to 1.4.11's 3:1. */
-    --control: 143 143 137;
+    --control: 161 161 170;
 
-    --accent-50: 239 242 255;
-    --accent-100: 226 232 254;
-    --accent-200: 201 212 253;
-    --accent-300: 165 180 250;
-    --accent-400: 129 140 245;
-    --accent-500: 91 96 233;
-    --accent-600: 73 71 214;
-    --accent-700: 59 55 176;
+    --accent-50: 245 243 255;
+    --accent-100: 237 233 254;
+    --accent-200: 221 214 254;
+    --accent-300: 196 181 253;
+    --accent-400: 167 139 250;
+    --accent-500: 139 92 246;
+    --accent-600: 124 58 237;
+    --accent-700: 109 40 217;
     --accent-fg: 255 255 255;
 
     --source-pubmed: 29 78 216;
@@ -49,7 +49,7 @@
     --caution: 180 83 9;
     --critical: 190 36 55;
 
-    --shadow: 24 24 32;
+    --shadow: 0 0 0;
   }
 
   html.dark {
@@ -58,29 +58,29 @@
     /* Not pure black: a near-black with a hint of blue keeps the elevation
        steps below distinguishable. On true #000 every raised surface has
        to be lighter, and the layering collapses into grey noise. */
-    --canvas: 15 16 20;
-    --surface: 22 23 28;
-    --raised: 28 29 35;
-    --sunken: 18 19 24;
+    --canvas: 9 9 11;
+    --surface: 24 24 27;
+    --raised: 39 39 42;
+    --sunken: 9 9 11;
 
-    --text-strong: 244 244 246;
-    --text-body: 209 209 216;
-    --text-muted: 154 154 164;
-    --text-faint: 118 118 128;
+    --text-strong: 250 250 250;
+    --text-body: 228 228 231;
+    --text-muted: 161 161 170;
+    --text-faint: 113 113 122;
 
-    --line: 40 41 48;
-    --line-strong: 56 57 66;
-    --control: 106 108 120;
+    --line: 39 39 42;
+    --line-strong: 63 63 70;
+    --control: 82 82 91;
 
-    --accent-50: 30 31 58;
-    --accent-100: 38 39 74;
-    --accent-200: 55 56 110;
-    --accent-300: 120 128 235;
-    --accent-400: 141 148 243;
-    --accent-500: 129 137 245;
-    --accent-600: 139 147 248;
-    --accent-700: 165 172 250;
-    --accent-fg: 17 17 24;
+    --accent-50: 46 16 101;
+    --accent-100: 76 29 149;
+    --accent-200: 91 33 182;
+    --accent-300: 109 40 217;
+    --accent-400: 124 58 237;
+    --accent-500: 139 92 246;
+    --accent-600: 167 139 250;
+    --accent-700: 196 181 253;
+    --accent-fg: 255 255 255;
 
     --source-pubmed: 125 165 255;
     --source-arxiv: 248 132 132;
@@ -152,7 +152,7 @@
 @layer components {
   /* The one surface treatment, so every panel in the app agrees. */
   .surface-panel {
-    @apply rounded-xl border border-line bg-surface;
+    @apply rounded-xl border border-line bg-surface shadow-sm;
   }
 
   /* Results live in ONE surface, divided by hairlines — not fifty separate
@@ -162,11 +162,7 @@
      dividers is how a list is supposed to look, and it is what every
      current tool in this category does. */
   .results-panel {
-    @apply overflow-hidden rounded-2xl bg-surface;
-    box-shadow:
-      0 0 0 1px rgb(var(--line)),
-      0 1px 2px rgb(var(--shadow) / 0.04),
-      0 8px 24px -8px rgb(var(--shadow) / 0.06);
+    @apply overflow-hidden rounded-xl bg-surface border border-line shadow-sm;
   }
 
   /* A row. No border of its own: the divider above it is the boundary, and

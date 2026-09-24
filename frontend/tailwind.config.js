@@ -86,15 +86,15 @@ export default {
         '3xl': ['1.875rem', { lineHeight: '2.25rem', letterSpacing: '-0.023em' }],
       },
 
-      borderRadius: { md: '0.5rem', lg: '0.625rem', xl: '0.875rem', '2xl': '1.125rem' },
+      borderRadius: { md: '0.375rem', lg: '0.5rem', xl: '0.75rem', '2xl': '1rem' },
 
       // Two-layer shadows: a tight contact shadow plus a wider ambient one.
-      // A single large blur is what makes a UI look like a 2015 template.
+      // Sharpened for a modern crisp look.
       boxShadow: {
-        subtle: '0 1px 2px rgb(var(--shadow) / 0.04), 0 1px 3px rgb(var(--shadow) / 0.06)',
-        raised: '0 1px 2px rgb(var(--shadow) / 0.05), 0 4px 12px -2px rgb(var(--shadow) / 0.08)',
-        float: '0 2px 4px rgb(var(--shadow) / 0.05), 0 12px 28px -6px rgb(var(--shadow) / 0.14)',
-        dialog: '0 8px 16px rgb(var(--shadow) / 0.08), 0 32px 64px -12px rgb(var(--shadow) / 0.28)',
+        subtle: '0 1px 2px 0 rgb(var(--shadow) / 0.05)',
+        raised: '0 1px 3px 0 rgb(var(--shadow) / 0.1), 0 1px 2px -1px rgb(var(--shadow) / 0.1)',
+        float: '0 4px 6px -1px rgb(var(--shadow) / 0.1), 0 2px 4px -2px rgb(var(--shadow) / 0.1)',
+        dialog: '0 10px 15px -3px rgb(var(--shadow) / 0.1), 0 4px 6px -4px rgb(var(--shadow) / 0.1)',
       },
 
       keyframes: {

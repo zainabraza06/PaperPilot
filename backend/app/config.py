@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,8 +28,34 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = Field(
         default=["http://localhost:5173", "http://127.0.0.1:5173"],
-        description="Origins allowed to call the API from a browser.",
+        description=(
+            "Origins allowed to call the API from a browser. Accepts a "
+            "comma-separated list or a JSON array."
+        ),
     )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        """Accept ``a,b`` as well as ``["a","b"]``.
+
+        Pydantic parses a ``list[str]`` field from the environment as JSON
+        and nothing else, so the obvious thing to type when deploying —
+        ``PAPERPILOT_CORS_ORIGINS=https://my-app.vercel.app`` — does not
+        merely get ignored. It raises ``SettingsError`` during import,
+        which means the container exits at startup with a stack trace
+        about JSON decoding and no mention of the variable the operator
+        actually set.
+
+        A deploy-time footgun that costs an hour of confusion is worth
+        eight lines of parsing. JSON still works, so nothing that already
+        set the variable correctly has to change.
+        """
+        if isinstance(value, str):
+            text = value.strip()
+            if not text.startswith("["):
+                return [item.strip() for item in text.split(",") if item.strip()]
+        return value
 
     # --- shared HTTP behaviour ------------------------------------------
     http_timeout_seconds: float = 15.0

@@ -86,6 +86,17 @@ EXPOSE 8000
 # Generous start period: the embedding model is loaded during startup, in
 # a worker thread, and that takes several seconds on a cold container.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-    CMD curl -fsS http://127.0.0.1:8000/health || exit 1
+    CMD curl -fsS "http://127.0.0.1:${PORT:-8000}/health" || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# The port comes from the environment, defaulting to 8000.
+#
+# Not a nicety: every managed host assigns the port and expects the process
+# to read it — Cloud Run and Railway inject $PORT, Hugging Face Spaces
+# expects 7860. A hard-coded 8000 means the platform health-checks a port
+# nothing is listening on, and the deploy fails with no useful error.
+#
+# `sh -c` is needed for the variable, and `exec` is needed so uvicorn
+# replaces the shell as PID 1 — otherwise SIGTERM goes to the shell and the
+# container is killed rather than shut down, dropping in-flight requests on
+# every deploy.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
