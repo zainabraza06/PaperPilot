@@ -95,8 +95,8 @@ export function SearchBar({
     <div className="w-full">
       <div
         className={cx(
-          'flex items-start gap-3 rounded-2xl border border-control bg-surface p-2.5 ps-4 transition duration-200',
-          'shadow-subtle focus-within:border-accent-400 focus-within:shadow-raised',
+          'flex items-start gap-3 rounded-xl border border-line-strong bg-surface p-2.5 ps-4 transition duration-200',
+          'shadow-sm focus-within:border-accent-500 focus-within:ring-1 focus-within:ring-accent-500 focus-within:shadow-raised',
         )}
       >
         <svg
