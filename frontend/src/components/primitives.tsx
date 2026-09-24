@@ -17,10 +17,10 @@ export function cx(...values: Array<string | false | null | undefined>): string 
 }
 
 const TONE_CLASSES: Record<Tone, string> = {
-  ok: 'text-positive bg-positive/[0.08]',
-  neutral: 'text-muted bg-sunken',
-  warn: 'text-caution bg-caution/[0.08]',
-  error: 'text-critical bg-critical/[0.08]',
+  ok: 'text-positive bg-positive/[0.08] border border-positive/20',
+  neutral: 'text-muted bg-sunken border border-line',
+  warn: 'text-caution bg-caution/[0.08] border border-caution/20',
+  error: 'text-critical bg-critical/[0.08] border border-critical/20',
 }
 
 export function Badge({
@@ -209,10 +209,10 @@ export function Button({
 } & Record<string, unknown>) {
   const variants = {
     primary:
-      'bg-accent-600 text-accent-fg shadow-subtle hover:bg-accent-500 active:scale-[0.98]',
+      'bg-accent-600 text-accent-fg shadow-sm hover:bg-accent-500 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
     secondary:
-      'bg-surface text-body ring-1 ring-inset ring-control hover:bg-sunken hover:text-strong active:scale-[0.98]',
-    ghost: 'text-muted hover:bg-sunken hover:text-strong',
+      'bg-surface text-strong shadow-sm border border-line hover:bg-sunken hover:border-line-strong active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
+    ghost: 'text-muted hover:bg-sunken hover:text-strong active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
   }
   return (
     <button

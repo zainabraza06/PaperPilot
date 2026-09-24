@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
-    cors_origins: list[str] = Field(
+    cors_origins: str | list[str] = Field(
         default=["http://localhost:5173", "http://127.0.0.1:5173"],
         description=(
             "Origins allowed to call the API from a browser. Accepts a "
@@ -58,9 +58,9 @@ class Settings(BaseSettings):
         return value
 
     # --- shared HTTP behaviour ------------------------------------------
-    http_timeout_seconds: float = 15.0
+    http_timeout_seconds: float = 35.0
     source_timeout_seconds: float = Field(
-        default=12.0,
+        default=30.0,
         description=(
             "Wall-clock budget for one source's entire search, retries included. "
             "A hung source costs the user exactly this much, since the fan-out can "
