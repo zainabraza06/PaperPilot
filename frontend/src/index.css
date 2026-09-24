@@ -23,13 +23,11 @@
     --text-strong: 9 9 11;
     --text-body: 39 39 42;
     --text-muted: 82 82 91;
-    --text-faint: 161 161 170;
+    --text-faint: 113 113 122;
 
-    --line: 228 228 231;
-    --line-strong: 212 212 216;
-    /* Borders that *identify a control* (inputs, checkboxes) rather than
-       merely separate content — held to 1.4.11's 3:1. */
-    --control: 161 161 170;
+    --line: 244 244 245;
+    --line-strong: 228 228 231;
+    --control: 113 113 122;
 
     --accent-50: 245 243 255;
     --accent-100: 237 233 254;
@@ -55,9 +53,6 @@
   html.dark {
     color-scheme: dark;
 
-    /* Not pure black: a near-black with a hint of blue keeps the elevation
-       steps below distinguishable. On true #000 every raised surface has
-       to be lighter, and the layering collapses into grey noise. */
     --canvas: 9 9 11;
     --surface: 24 24 27;
     --raised: 39 39 42;
@@ -69,8 +64,8 @@
     --text-faint: 113 113 122;
 
     --line: 39 39 42;
-    --line-strong: 63 63 70;
-    --control: 82 82 91;
+    --line-strong: 18 18 20;
+    --control: 161 161 170;
 
     --accent-50: 46 16 101;
     --accent-100: 76 29 149;
@@ -80,7 +75,7 @@
     --accent-500: 139 92 246;
     --accent-600: 167 139 250;
     --accent-700: 196 181 253;
-    --accent-fg: 255 255 255;
+    --accent-fg: 9 9 11;
 
     --source-pubmed: 125 165 255;
     --source-arxiv: 248 132 132;
