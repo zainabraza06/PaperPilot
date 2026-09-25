@@ -11,20 +11,7 @@ one query, one ranked list, AI summaries, one-click citation export.
 
 ---
 
-## Screenshots
 
-| | |
-|---|---|
-| ![Results](docs/screenshots/04-results-light.png) | ![Results, dark](docs/screenshots/04-results-dark.png) |
-| **Ranked results** — one panel, provenance, relevance meters, AI summaries with their grounding verdict, extracted entities | **Dark mode**, respected from the OS preference before first paint |
-| ![Detail](docs/screenshots/08-detail-dark.png) | ![Pipeline](docs/screenshots/06-pipeline-status.png) |
-| **Paper detail** — entities highlighted inline in the abstract, and *why the first summary attempt was rejected* | **Pipeline transparency** — what every stage did, and which degraded |
-| ![Clusters](docs/screenshots/07-clusters.png) | ![Export](docs/screenshots/09-export-bar.png) |
-| **Sub-topic filters** — 59 papers narrowed to 45 in one click | **Bulk export** — select, pick a format, file downloads. No confirmation step |
-| ![Mobile](docs/screenshots/10-mobile.png) | ![Query hint](docs/screenshots/02-query-hint-light.png) |
-| **Responsive** at 390px, history as a drawer | **Live query-type detection**, classified server-side |
-
----
 
 ## The problem
 
