@@ -56,7 +56,7 @@ Ranked by how well they fit *these* numbers, not by general popularity.
 |---|---|---|---|
 | **Hugging Face Spaces** | Yes, no card | **16 GB** | **Best fit.** Built for exactly this. |
 | **Google Cloud Run** | Yes, within free tier | up to 32 GB | Best if you want real infrastructure. Card required. |
-| **Oracle Cloud Always Free** | Yes, forever | 24 GB | Most capable, most manual. Signup is unreliable. |
+| **Oracle Cloud Always Free** | Yes, forever | **24 GB** | Most capable by far, and the most manual. [See below.](#option-d--oracle-cloud-always-free) |
 | Fly.io | No — ~$2–4/mo | 1 GB | Cheapest genuinely-good paid option. |
 | Render free | Yes | 512 MB | **Will OOM.** Below our 865 MB peak. |
 | Vercel / Netlify functions | Yes | n/a | **Impossible.** No persistent process; torch exceeds the bundle limit. |
@@ -200,8 +200,9 @@ Cloud Run injects `$PORT` (8080), which the image already honours.
 
 ## Option C — everything in one box
 
-If you have any host that runs Docker Compose — an Oracle Always Free VM, a
-cheap VPS, a spare machine — this is the least configuration of all:
+If you have any host that runs Docker Compose — a cheap VPS, a spare
+machine, or the Oracle instance in Option D — this is the least
+configuration of all:
 
 ```bash
 git clone https://github.com/zainabraza06/PaperPilot && cd PaperPilot
@@ -214,6 +215,129 @@ service name. **No `VITE_API_BASE` and no CORS setting are needed**, because
 the app is same-origin — which is why the compose setup is the one that
 works with zero configuration. Put a reverse proxy with TLS in front
 (Caddy is two lines) and it is done.
+
+Option D is this, on hardware that costs nothing.
+
+---
+
+## Option D — Oracle Cloud Always Free
+
+On the numbers this is the best free option that exists, and it is the only
+one on the list with no expiry, no sleep and no cold start. It is also the
+only one where you are the sysadmin.
+
+### What the Always Free tier gives you
+
+The part that matters is the **Ampere A1 (ARM64)** allowance: **4 OCPUs and
+24 GB of RAM**, which you can pour into a single VM or split across up to
+four. Alongside it: 200 GB of block storage and 10 TB/month of egress.
+Always Free means always — it is not a 12-month trial, though Oracle also
+gives you trial credits on top at signup.
+
+Against this app's 865 MB peak that is roughly **27× headroom**, which
+changes what you can do:
+
+- **No cold start.** The model stays loaded. Cloud Run pays ~15 s on a
+  scaled-to-zero request and a sleeping Space pays more; here the process
+  simply never stops.
+- **The SQLite cache is permanent.** Summaries survive reboots and
+  redeploys, so each paper is sent to Mistral once *ever* rather than once
+  per deploy. On the ephemeral hosts you re-pay after every push.
+- **Compose works as-is.** One box runs both containers on one network,
+  so the app is same-origin — no `VITE_API_BASE`, no
+  `PAPERPILOT_CORS_ORIGINS`, none of the split-hosting failure modes in
+  this document apply.
+
+### ARM64: checked, and it is fine
+
+The A1 shapes are aarch64, not x86, which is the first thing to worry about
+for a PyTorch service. It turns out not to be a problem — the exact wheel
+this image pins exists on the exact index it pins:
+
+```bash
+$ curl -s https://download.pytorch.org/whl/cpu/torch/ | grep 'torch-2.5.1-cp312.*aarch64'
+torch-2.5.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+```
+
+spaCy ships 10 aarch64 wheels and scikit-learn 7, so the rest of the stack
+resolves too. **`backend/Dockerfile` builds unmodified on an A1 instance.**
+Build it *on* the instance rather than cross-building on an x86 laptop —
+`docker buildx` under QEMU emulation will work and will take the better
+part of an hour.
+
+The one way to get this wrong is shape selection. The tier also includes
+two AMD `VM.Standard.E2.1.Micro` instances, and those are **1 GB of RAM
+each** — under the 865 MB peak once the OS takes its share. Pick
+`VM.Standard.A1.Flex`.
+
+### The three things that actually go wrong
+
+**"Out of host capacity."** The notorious one. A1 capacity in popular
+regions is frequently exhausted and launches fail for days. Your home
+region is fixed at signup and cannot be changed afterwards, so choose a
+quieter one then rather than the nearest big one. Upgrading to
+Pay-As-You-Go improves your priority and still costs nothing while you
+stay inside the Always Free limits.
+
+**Idle reclamation.** Oracle reclaims Always Free compute that has been
+idle for 7 days — roughly, under 20% CPU with low network and memory use.
+A portfolio demo nobody visits is *precisely* that profile, so the instance
+you set up in January is gone in February. Upgrading to Pay-As-You-Go
+exempts you from reclamation and remains $0 inside the free limits; that
+upgrade is the single most useful thing you can do to this account.
+
+**The firewall is in two places.** Opening a port in the OCI Security List
+is half the job: Oracle's Ubuntu and Oracle Linux images also ship
+restrictive `iptables` rules that drop everything except SSH. Traffic dies
+silently at the second one, and the symptom is a connection timeout that
+looks exactly like a wrong Security List.
+
+```bash
+# on the instance, after opening 80/443 in the OCI Security List
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80  -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save        # Ubuntu; otherwise iptables-save
+```
+
+### Setting it up
+
+```bash
+# 1. Launch VM.Standard.A1.Flex — 4 OCPU / 24 GB, Ubuntu 22.04 or 24.04.
+#    Add your SSH key. Open 80 and 443 in the Security List.
+
+# 2. On the instance:
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker ubuntu && newgrp docker
+
+git clone https://github.com/zainabraza06/PaperPilot && cd PaperPilot
+printf 'PAPERPILOT_MISTRAL_API_KEY=%s\n' "$KEY" > .env
+docker compose up --build -d          # first build ~15 min on 4 ARM cores
+```
+
+That is already a working deployment on port 5173. For a real hostname
+with TLS, put Caddy in front — it obtains and renews the certificate
+itself:
+
+```caddyfile
+# /etc/caddy/Caddyfile
+paperpilot.example.com {
+    reverse_proxy localhost:5173
+}
+```
+
+Because everything is behind one origin, nothing in the app needs to know
+its own public URL.
+
+### Should you use it?
+
+**Yes, if** you want the demo to be instant rather than cold-starting, you
+want the summary cache to persist, or you want a VM on your CV.
+
+**No, if** you would rather not own a public Linux box. This is the only
+option here where you are responsible for TLS renewal, patching, and the
+fact that an exposed instance is a real target. Hugging Face Spaces gets
+you a working public demo in twenty minutes with none of that, and for a
+portfolio link that is usually the better trade.
 
 ---
 
