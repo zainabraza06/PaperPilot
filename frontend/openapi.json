@@ -353,6 +353,64 @@
         "title": "Author",
         "description": "A paper author.\n\n``given``/``family`` are kept separate whenever the source provides them\nbecause citation formats (BibTeX, RIS) need the split. ``name`` is the\ndisplay form and is always populated."
       },
+      "BackfillReport": {
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "missing": {
+            "type": "integer",
+            "title": "Missing",
+            "description": "Records that arrived with no abstract.",
+            "default": 0
+          },
+          "recovered": {
+            "type": "integer",
+            "title": "Recovered",
+            "description": "How many an abstract was found for.",
+            "default": 0
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "title": "Elapsed Ms",
+            "default": 0
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "applied",
+          "source",
+          "missing",
+          "recovered",
+          "elapsed_ms",
+          "reason"
+        ],
+        "title": "BackfillReport",
+        "description": "Whether missing abstracts were recovered, and how many.\n\nWorth reporting rather than doing silently: a record that gained an\nabstract is ranked, summarized and grounded on different evidence\nthan the one that arrived, and \"12 of 40 abstracts recovered from\nOpenAlex\" is the difference between a pipeline that looks lucky and\none a reader can audit."
+      },
       "CacheReport": {
         "properties": {
           "hit": {
@@ -1281,6 +1339,9 @@
           },
           "cache": {
             "$ref": "#/components/schemas/CacheReport"
+          },
+          "backfill": {
+            "$ref": "#/components/schemas/BackfillReport"
           }
         },
         "type": "object",
@@ -1296,7 +1357,8 @@
           "clustering",
           "entities",
           "summaries",
-          "cache"
+          "cache",
+          "backfill"
         ],
         "title": "SearchResponse",
         "description": "Merged, deduplicated results plus the provenance of the fan-out."

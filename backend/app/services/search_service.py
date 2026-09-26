@@ -35,6 +35,7 @@ from app.models.clusters import ClusteringReport, TopicCluster
 from app.models.entities import Entity
 from app.models.paper import Paper, SourceName
 from app.models.search import (
+    BackfillReport,
     CacheReport,
     EnrichmentReport,
     IdentifierKind,
@@ -49,6 +50,7 @@ from app.models.search import (
 )
 from app.models.summary import Summary, SummaryReport
 from app.services.dedupe import deduplicate
+from app.services.enrichment.abstracts import AbstractBackfill
 from app.services.enrichment.clustering import TopicClusterer
 from app.services.enrichment.entities import EntityExtractor
 from app.services.query_parser import parse_query
@@ -75,6 +77,7 @@ class SearchService:
         summarizer: PaperSummarizer | None = None,
         paper_store: PaperStore | None = None,
         search_cache: SearchCache | None = None,
+        backfill: AbstractBackfill | None = None,
     ) -> None:
         self._registry = registry
         self._settings = settings
@@ -84,6 +87,7 @@ class SearchService:
         self._summarizer = summarizer
         self._paper_store = paper_store
         self._search_cache = search_cache
+        self._backfill = backfill
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         started = time.perf_counter()
@@ -121,7 +125,12 @@ class SearchService:
         )
 
         merged = deduplicate(_interleave(results))
-        papers, ranking = await self._rank(parsed, merged.papers)
+        # Before ranking, deliberately. A recovered abstract is only worth
+        # fetching if everything downstream sees it — the ranker scores on
+        # it, the clusterer embeds it, the summarizer needs it, and the
+        # grounding check has nothing to check without it.
+        backfilled, backfill = await self._backfill_abstracts(merged.papers)
+        papers, ranking = await self._rank(parsed, backfilled)
 
         # The three enrichment passes are independent, and one of them is
         # network-bound while the others are CPU-bound, so they overlap well.
@@ -152,6 +161,7 @@ class SearchService:
             clustering=clustering,
             entities=entities,
             summaries=summary_report,
+            backfill=backfill,
             cache=CacheReport(
                 hit=False,
                 ttl_seconds=self._search_cache.ttl_seconds if self._search_cache else None,
@@ -159,6 +169,23 @@ class SearchService:
         )
         await self._cache(key, response)
         return response
+
+    async def _backfill_abstracts(
+        self, papers: list[Paper]
+    ) -> tuple[list[Paper], BackfillReport]:
+        """Recover missing abstracts, degrading to the papers as they came."""
+        if self._backfill is None or not papers:
+            return papers, BackfillReport(
+                applied=False,
+                reason="abstract backfill is disabled"
+                if self._backfill is None
+                else "no papers to enrich",
+            )
+        try:
+            return await self._backfill.fill(papers)
+        except Exception:
+            logger.exception("abstract backfill failed")
+            return papers, BackfillReport(applied=False, reason="backfill failed")
 
     # --- caching ---------------------------------------------------------
 

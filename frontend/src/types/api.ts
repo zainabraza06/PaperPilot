@@ -158,6 +158,41 @@ export interface components {
             affiliation: string | null;
         };
         /**
+         * BackfillReport
+         * @description Whether missing abstracts were recovered, and how many.
+         *
+         *     Worth reporting rather than doing silently: a record that gained an
+         *     abstract is ranked, summarized and grounded on different evidence
+         *     than the one that arrived, and "12 of 40 abstracts recovered from
+         *     OpenAlex" is the difference between a pipeline that looks lucky and
+         *     one a reader can audit.
+         */
+        BackfillReport: {
+            /** Applied */
+            applied: boolean;
+            /** Source */
+            source: string | null;
+            /**
+             * Missing
+             * @description Records that arrived with no abstract.
+             * @default 0
+             */
+            missing: number;
+            /**
+             * Recovered
+             * @description How many an abstract was found for.
+             * @default 0
+             */
+            recovered: number;
+            /**
+             * Elapsed Ms
+             * @default 0
+             */
+            elapsed_ms: number;
+            /** Reason */
+            reason: string | null;
+        };
+        /**
          * CacheReport
          * @description Whether this response came from the search cache.
          *
@@ -611,6 +646,7 @@ export interface components {
             entities: components["schemas"]["EnrichmentReport"];
             summaries: components["schemas"]["SummaryReport"];
             cache: components["schemas"]["CacheReport"];
+            backfill: components["schemas"]["BackfillReport"];
         };
         /** SourceInfo */
         SourceInfo: {

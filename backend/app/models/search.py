@@ -147,6 +147,24 @@ class RankingReport(ApiModel):
     reason: str | None = Field(default=None, description="Why ranking did not run.")
 
 
+class BackfillReport(ApiModel):
+    """Whether missing abstracts were recovered, and how many.
+
+    Worth reporting rather than doing silently: a record that gained an
+    abstract is ranked, summarized and grounded on different evidence
+    than the one that arrived, and "12 of 40 abstracts recovered from
+    OpenAlex" is the difference between a pipeline that looks lucky and
+    one a reader can audit.
+    """
+
+    applied: bool
+    source: str | None = None
+    missing: int = Field(default=0, description="Records that arrived with no abstract.")
+    recovered: int = Field(default=0, description="How many an abstract was found for.")
+    elapsed_ms: int = 0
+    reason: str | None = None
+
+
 class CacheReport(ApiModel):
     """Whether this response came from the search cache.
 
@@ -199,6 +217,9 @@ class SearchResponse(ApiModel):
         default_factory=lambda: SummaryReport(applied=False)
     )
     cache: CacheReport = Field(default_factory=CacheReport)
+    backfill: BackfillReport = Field(
+        default_factory=lambda: BackfillReport(applied=False)
+    )
 
     @property
     def degraded(self) -> bool:

@@ -42,7 +42,7 @@ class BM25Scorer:
             bigrams: also index adjacent token pairs, so multi-word terms
                 match as units. Measured on the 20-query golden set: it
                 fixes the query it was built for (prime-editing NDCG@10
-                0.592 -> 0.689) but *lowers* the average (0.915 -> 0.898),
+                0.592 -> 0.689) but *lowers* the average (0.917 -> 0.906),
                 because doubling the term space dilutes unigram IDF
                 everywhere else. Off by default; kept because it is the
                 right lever for a phrase-heavy corpus and the trade-off is

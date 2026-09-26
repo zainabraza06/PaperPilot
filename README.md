@@ -40,6 +40,12 @@ measures both, and reports the results that came out badly:
   the screenshots — including a detail modal that rendered fully transparent in dark
   mode while `[role="dialog"]` was still, technically, visible.
 
+- **Fixing the data made a ranking workaround redundant.** Backfilling missing
+  abstracts from OpenAlex (48% of the 77 that lacked one) removed most of the
+  population that the "evidence prior" existed to correct — and that prior's measured
+  effect fell from **+0.014 [+0.004, +0.025]** to **+0.003 [−0.009, +0.018]**. The
+  backfill's own ranking gain also failed its confidence interval, and is not claimed.
+
 Several measured ideas did not pay off and are kept as negative results: bigram BM25,
 a coverage-focused prompt rewrite, and the honest reading that hybrid ranking beats
 semantic-alone by about a point, which is inside the noise on 20 queries.
@@ -312,11 +318,11 @@ Reproduce with `python -m scripts.evaluate_ranking`.
 | strategy                     | R@5   | R@10  | R@20  | NDCG@5 | NDCG@10 | NDCG@20 | MRR   |
 |------------------------------|-------|-------|-------|--------|---------|---------|-------|
 | retrieval-order (no ranking) | 0.294 | 0.529 | 0.910 | 0.733  | 0.727   | 0.839   | 0.925 |
-| lexical only (BM25)          | 0.333 | 0.604 | 0.971 | 0.861  | 0.864   | 0.933   | 0.942 |
-| semantic only (embeddings)   | 0.349 | 0.621 | 0.972 | 0.906  | 0.899   | 0.950   | **0.975** |
-| **hybrid linear (α=0.6)**    | 0.346 | **0.630** | 0.972 | **0.917** | **0.915** | **0.959** | **0.975** |
-| hybrid RRF                   | 0.342 | 0.614 | **0.974** | 0.910 | 0.894 | 0.954 | **0.975** |
-| ↳ minus the evidence prior   | 0.351 | 0.628 | 0.972 | 0.902  | 0.901   | 0.954   | 0.950 |
+| lexical only (BM25)          | 0.333 | 0.597 | 0.971 | 0.872  | 0.872   | 0.940   | 0.967 |
+| semantic only (embeddings)   | 0.352 | 0.624 | 0.972 | 0.925  | 0.906   | 0.957   | 0.967 |
+| **hybrid linear (α=0.6)**    | 0.343 | **0.628** | 0.972 | **0.934** | **0.917** | **0.963** | **0.975** |
+| hybrid RRF                   | 0.348 | 0.604 | **0.974** | 0.934 | 0.895 | 0.959 | **0.975** |
+| ↳ minus the evidence prior   | 0.351 | 0.625 | 0.972 | 0.916  | 0.908   | 0.957   | 0.950 |
 
 The golden set started at 8 queries and 174 candidates. That was too few to separate an
 effect from noise, and it skewed biomedical and ML; the twelve added queries bring in
@@ -408,21 +414,73 @@ of a sweep** — and that distinction changed the answer:
 | 8  | +0.006 | [−0.012, +0.026] | 8 / 6 |
 | 20 | +0.005 | [−0.021, +0.035] | 8 / 6 |
 
-Only `k ∈ [2, 4]` improves with an interval that excludes zero. The *largest* apparent
+Only `k ∈ [2, 4]` improved with an interval that excluded zero. The *largest* apparent
 gain in the whole sweep was NDCG@5 **+0.038** at `k=20` — which looks like the winner
 until the interval comes back `[−0.011, +0.105]` on a 6–4 split. Picking that number
-would have been picking noise. The shipped effect is small, real, and reported as
-small: **NDCG@10 0.901 → 0.915, MRR 0.950 → 0.975**, with `federated-learning-privacy`
-going 0.651 → 0.717 and its MRR 0.500 → 1.000.
+would have been picking noise. The shipped effect was small, real, and reported as
+small: **NDCG@10 0.901 → 0.915, MRR 0.950 → 0.975**.
 
-The ablation ships as a row in the evaluation script, so the prior stays falsifiable.
+**And then the abstract backfill made it redundant.** Those numbers were measured when
+77 of 411 pooled records had nothing but a title. Recovering 37 of those abstracts (see
+below) removed most of the population the prior existed to correct, and its effect
+collapsed into the noise:
+
+| | title-only records | ΔNDCG@10 at k=3 | 95% CI | W/L |
+|---|---|---|---|---|
+| before backfill | 77 | **+0.014** | **[+0.004, +0.025]** | 10 / 3 |
+| after backfill | 38 | +0.003 | [−0.009, +0.018] | 4 / 3 |
+
+The prior stays, because 38 records still carry the bias, the remaining coverage gap is
+not guaranteed to close, and the measured cost is zero. But the honest statement is now
+"this corrects a bias that is mostly no longer there", not "this improves ranking" —
+and the more interesting result is the general one: **fixing the data removed the need
+for the ranking workaround.** The ablation ships as a row in the evaluation script, so
+either claim stays falsifiable.
+
+### Recovering the abstracts that never arrived
+
+One pooled record in five arrived with no abstract — almost all from Crossref, where
+depositing one is optional. Those papers are the weakest thing in the pipeline: they
+cannot be summarized, cannot be grounded, and rank on a title while their neighbours
+rank on a paragraph.
+
+The abstract usually exists, it just is not in the record we received. OpenAlex holds
+abstracts for a large share of DOIs Crossref lacks, so
+[`abstracts.py`](backend/app/services/enrichment/abstracts.py) asks for them, batched
+50 DOIs per call, before ranking.
+
+```
+$ python -m scripts.backfill_pool
+pool            : 411 records across 20 queries
+no abstract     : 77 (19%)
+recovered       : 37 of 77 (48%)   in 1565ms
+                  (77 -> 40 without an abstract)
+```
+
+**What it demonstrably buys, and what it does not.** The unverifiable population
+nearly halves, 19% → 10%, and those 37 papers become summarizable and groundable —
+that part is a fact, not an inference. What it does *not* buy is measurably better
+ranking: NDCG@5 moved 0.917 → 0.934, but the paired bootstrap puts that at
+**+0.017 [−0.004, +0.039] on a 4–2 split**, and NDCG@10 at +0.002. Every interval
+spans zero. The feature ships for the summarization and grounding benefit, which is
+directly observable, and the ranking claim is not made.
+
+The interesting consequence is above: it removed most of the population the evidence
+prior was correcting for, and took that prior's measured effect with it.
+
+Two rules keep it affordable inside a request. Batching means 77 gaps cost two calls,
+not 77. And it cannot fail the search — any error, timeout or malformed payload leaves
+every paper exactly as it arrived, because an enrichment that can take down a result
+set is not worth having. A reconstructed abstract shorter than 120 characters is also
+rejected: a copyright line is worse than nothing, because it makes a paper look
+summarizable when it is not.
 
 ### A measured idea that did not pay off
 
 BM25 is a bag of words, so "prime editing" is scored as two independent terms and a
 paper matching *editing* + *efficiency* + *CRISPR* + *human* can outrank one actually
 about prime editing. Indexing adjacent token pairs fixes exactly that query
-(NDCG@10 **0.592 → 0.689**) but **lowers the average** (0.915 → 0.898), because doubling
+(NDCG@10 **0.592 → 0.689**) but **lowers the average** (0.917 → 0.906), because doubling
 the term space dilutes unigram IDF everywhere else. It ships off by default, with the
 trade-off recorded in [`lexical.py`](backend/app/services/ranking/lexical.py) rather
 than quietly dropped.
@@ -443,10 +501,12 @@ query in exchange for the average.
   at df = N/2); the hybrid correctly falls back to semantic there.
 - **Judgments are single-annotator**, assigned by reading each title and abstract
   against a documented rubric. There is no inter-annotator agreement figure.
-- **Papers with no abstract rank on title and keywords alone**, which is genuinely
-  weaker evidence — a known cost of Crossref's incomplete abstract coverage. The
-  evidence prior corrects the *scoring* bias this caused; it cannot invent the missing
-  text, and such records are still ranked on less information than their neighbours.
+- **Papers with no abstract rank on title and keywords alone** — mostly Crossref
+  records, where depositing an abstract is optional. This was 19% of the pool and is
+  now **10%**: the backfill recovers the abstract from OpenAlex where one exists
+  (48% of the 77 that lacked one). The rest genuinely have no abstract anywhere —
+  editorials, chapters, conference front-matter — and are still ranked on less
+  information than their neighbours.
 - The golden set is checked in ([`backend/eval/`](backend/eval/)) so the judgments can
   be audited: each entry carries its grade *and* the paper title.
 
@@ -1289,7 +1349,7 @@ image as reviewed but unbuilt.
 
 ```bash
 cd backend
-python -m pytest          # 449 tests
+python -m pytest          # 482 tests
 python -m ruff check app tests
 python -m mypy app scripts
 
@@ -1339,6 +1399,8 @@ Coverage is concentrated where interviews probe:
 | Embedders, BM25, the fusion strategies, and the evidence prior | `tests/test_ranking.py` |
 | IR metrics, hand-computed from their definitions | `tests/test_ranking_evaluation.py` |
 | Entity patterns, label normalization, trust guards | `tests/test_entities.py` |
+| Abstract backfill: batching, stub rejection, failure isolation | `tests/test_abstract_backfill.py` |
+| Search-response caching, and never caching a degraded one | `tests/test_search_cache.py` |
 | Cluster selection, labelling, and refusal to split | `tests/test_clustering.py` |
 | Embedding cache correctness and eviction | `tests/test_embedding_cache.py` |
 | Every grounding rule, and the limitation it cannot cover | `tests/test_grounding.py` |

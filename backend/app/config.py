@@ -103,6 +103,21 @@ class Settings(BaseSettings):
     crossref_base_url: str = "https://api.crossref.org"
     crossref_mailto: str | None = None
 
+    # --- abstract backfill -----------------------------------------------
+    # Roughly one Crossref record in five arrives with no abstract, and
+    # OpenAlex has one for about a third of those. Measured on the golden
+    # set; see services/enrichment/abstracts.py.
+    openalex_base_url: str = "https://api.openalex.org"
+    openalex_mailto: str | None = None
+    abstract_backfill_enabled: bool = True
+    abstract_backfill_timeout_seconds: float = Field(
+        default=6.0,
+        description=(
+            "Budget for the whole backfill. It sits in the request path and "
+            "is an improvement, not a requirement, so it gets a short leash."
+        ),
+    )
+
     # --- search defaults --------------------------------------------------
     default_results_per_source: int = 20
     max_results_per_source: int = 100

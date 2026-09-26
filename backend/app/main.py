@@ -22,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import export, health, search
 from app.config import Settings, get_settings
 from app.core.logging import configure_logging, get_logger
+from app.services.enrichment.abstracts import AbstractBackfill
 from app.services.enrichment.clustering import TopicClusterer
 from app.services.enrichment.entities import EntityExtractor, build_entity_extractor
 from app.services.ranking.cache import CachedEmbedder
@@ -62,6 +63,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         PaperStore(settings.paper_store_path) if settings.paper_store_path else None
     )
     search_cache = _build_search_cache(settings)
+    backfill = (
+        AbstractBackfill(settings) if settings.abstract_backfill_enabled else None
+    )
 
     app.state.registry = registry
     app.state.embedder = embedder
@@ -72,6 +76,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.summarizer = summarizer
     app.state.paper_store = paper_store
     app.state.search_cache = search_cache
+    app.state.abstract_backfill = backfill
     app.state.search_service = SearchService(
         registry,
         settings,
@@ -81,6 +86,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         summarizer,
         paper_store,
         search_cache,
+        backfill,
     )
     logger.info(
         "%s started | sources: %s | ranking: %s | entities: %s | clustering: %s "
@@ -101,6 +107,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             cache.close()
         if search_cache is not None:
             search_cache.close()
+        if backfill is not None:
+            await backfill.aclose()
         if paper_store is not None:
             paper_store.close()
         logger.info("shutdown complete")
