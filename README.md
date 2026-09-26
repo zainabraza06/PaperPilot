@@ -121,34 +121,99 @@ worst of both.
 | Serverless functions | Yes | Neither | No persistent process; torch exceeds the bundle limit. |
 | PythonAnywhere free | Yes | Neither | Whitelists outbound HTTP — PubMed and arXiv unreachable. |
 
-**Oracle Cloud Always Free is the recommendation.** No expiry, no sleep, no cold
-start, and 24 GB against an 865 MB peak. The A1 shapes are ARM64, which matters for a
-PyTorch service — checked, and it is fine: `torch-2.5.1-cp312 … aarch64` exists on the
-exact CPU index `backend/Dockerfile` pins, and spaCy and scikit-learn ship aarch64
-wheels too, so **the image builds unmodified**. Build it *on* the instance; buildx
-under QEMU works and takes an hour.
+#### Running the full profile on Oracle
 
-Three Oracle-specific things go wrong: A1 capacity is often exhausted in busy regions
-and your home region is fixed at signup; idle Always Free compute is reclaimed after
-seven days, which is exactly the profile of a demo nobody visits (a free
-Pay-As-You-Go upgrade exempts you and still costs nothing); and the firewall exists
-in two places — Oracle's images ship iptables rules that silently drop traffic the
-Security List allows.
+This is the setup to use if the deployment is meant to be looked at. The full
+profile needs 865 MB and an A1 instance has 24 GB, so nothing has to be traded away:
+real embeddings, real NER, no cold start, and a summary cache that persists for the
+life of the box.
+
+The A1 shapes are ARM64, which is the thing to check first for a PyTorch service.
+Checked, and it is fine: `torch-2.5.1-cp312 … aarch64` exists on the exact CPU index
+`backend/Dockerfile` pins, and spaCy and scikit-learn ship aarch64 wheels too, so
+**the image builds unmodified**. Build it *on* the instance — `buildx` under QEMU
+emulation works and takes about an hour instead of fifteen minutes.
+
+**1. Launch.** `VM.Standard.A1.Flex`, 4 OCPU / 24 GB, Ubuntu 22.04 or 24.04, 50 GB
+boot volume. Open 80 and 443 in the subnet's Security List.
+
+**2. Upgrade the account to Pay-As-You-Go before anything else.** Oracle reclaims
+Always Free compute that has been idle for seven days, and a portfolio demo nobody
+has visited yet is *exactly* that profile — the instance you build today is gone
+before anyone clicks the link. The upgrade exempts you from reclamation and still
+costs nothing while you stay inside the Always Free limits. Skipping this is the
+single most common way these deployments quietly die.
+
+**3. Open the second firewall.** The Security List is only half of it; Oracle's
+images also ship `iptables` rules that drop everything except SSH, and traffic dies
+there silently.
 
 ```bash
-# on an Ubuntu A1 instance, ports 80/443 already open in the Security List
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80  -j ACCEPT
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
-sudo netfilter-persistent save
+sudo netfilter-persistent save        # Ubuntu; otherwise iptables-save
+```
+
+**4. Bring it up.**
+
+```bash
+sudo apt update && sudo apt install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker ubuntu && newgrp docker
+sudo systemctl enable --now docker    # survives reboot; compose restarts with it
 
 git clone https://github.com/zainabraza06/PaperPilot && cd PaperPilot
 printf 'PAPERPILOT_MISTRAL_API_KEY=%s\n' "$KEY" > .env
-docker compose up --build -d
+printf 'PAPERPILOT_CROSSREF_MAILTO=%s\n' "$EMAIL" >> .env
+docker compose up --build -d          # ~15 min on 4 ARM cores
 ```
 
-Compose runs both containers on one network with nginx proxying `/api` by service
-name, so the app is **same-origin** and needs no `VITE_API_BASE` and no
-`PAPERPILOT_CORS_ORIGINS` at all.
+Both services carry `restart: unless-stopped` and the SQLite cache lives on a named
+volume, so a reboot loses nothing and needs no systemd unit of its own.
+
+**5. TLS on a real hostname.** A demo on `http://132.226.x.x:5173` looks like a
+staging box; Caddy gets a certificate on its own.
+
+```caddyfile
+# /etc/caddy/Caddyfile
+paperpilot.example.com {
+    reverse_proxy localhost:5173
+}
+```
+
+Because everything sits behind one origin, nothing in the app needs to know its own
+public URL — no `VITE_API_BASE`, no `PAPERPILOT_CORS_ORIGINS`.
+
+#### What will actually let this down, and what to do about it
+
+**First-click latency is the real risk, and pre-warming only half fixes it.**
+Summaries and embeddings are cached in SQLite on the volume, so running the demo
+queries once makes those free forever:
+
+```bash
+docker compose exec backend python -m scripts.demo_search "CRISPR prime editing efficiency in human cells"
+docker compose exec backend python -m scripts.demo_search "graph neural networks for molecular property prediction"
+```
+
+But **the upstream fan-out is not cached**. Every search still pays 3–7 s querying
+PubMed, arXiv and Crossref live, even for a query run a minute ago. That is the floor,
+and the honest framing is that the loading state names the three sources while it
+works and the pipeline panel shows what each one returned — the wait is doing visible
+work rather than spinning. A short-TTL response cache in front of the fan-out is the
+obvious next improvement and is not built.
+
+**arXiv rate-limits by IP, and cloud IPs are the ones that get blocked.** The block
+outlasts the documented one-request-per-three-seconds window, and on a shared or
+recycled address you can inherit someone else's. The app degrades correctly — the
+banner names arXiv as unavailable and the other two sources still answer — but a
+reviewer arriving at a degraded demo does not know that was designed. Check the link
+before you send it.
+
+**Keep the key scoped.** The instance is a public box with an LLM credential on it.
+Use a Mistral key created for this and nothing else, so revoking it costs you
+nothing. Without a key the app still runs and summaries become extractive, labelled
+`From abstract` — which caps the spend at zero if the link ever gets traffic.
+
+#### If you split the frontend and backend instead
 
 **Split hosting** (static frontend elsewhere, backend on a PaaS) needs both:
 `VITE_API_BASE` at frontend *build* time, and `PAPERPILOT_CORS_ORIGINS` on the
