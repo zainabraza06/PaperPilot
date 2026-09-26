@@ -79,16 +79,88 @@ VITE_API_PROXY=http://127.0.0.1:8010 npm run dev
 
 ### Deploying it
 
-[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) covers this properly, starting from the
-measurement that decides everything: the backend holds a sentence-transformer, spaCy
-and torch resident, so it sits at **513 MB idle and peaks at 865 MB** during a search.
-That rules out every serverless-function platform and the 512 MB free tiers — which
-start fine, serve `/health`, and then OOM on the first real query.
+One measurement decides where this can be hosted. The backend keeps a
+sentence-transformer, spaCy and PyTorch resident for the life of the process:
 
-The short version: **Hugging Face Spaces** for the backend (free, no card, 16 GB) and
-**Vercel** for the frontend, or **Cloud Run** if you want real autoscaling. Anything
-that runs Docker Compose needs no configuration at all, because the app is
-same-origin there.
+| Profile | Resident | Peak during a search | Ranking NDCG@10 |
+|---|---|---|---|
+| **Full** (MiniLM + spaCy) | 513 MB | **865 MB** | **0.915** |
+| **Lite** (no model, no NER) | — | **159 MB** | 0.864 |
+
+The full profile rules out every serverless-function platform and every 512 MB free
+tier — those start fine, serve `/health`, and then OOM on the first real query, which
+is the worst failure mode because it looks like a successful deploy.
+
+**The lite profile fits anywhere.** It drops the embedding model and the NER pass, so
+torch is never imported:
+
+```bash
+PAPERPILOT_EMBEDDING_MODEL=            # empty → deterministic hashing embedder
+PAPERPILOT_RANKING_STRATEGY=lexical    # see below
+PAPERPILOT_ENTITIES_ENABLED=false
+```
+
+Measured on the same 20-query golden set, that costs **NDCG@10 0.915 → 0.864**, about
+six percent, and loses inline entity highlighting. Everything else — three-source
+fan-out, deduplication, clustering, grounded summaries, citation export — is
+unaffected.
+
+`RANKING_STRATEGY=lexical` is not a detail. With no real embedder the "semantic"
+signal is noise, and fusing it actively hurts: lite hybrid scores **0.852** while lite
+lexical-only scores **0.864**. Leaving the default `linear` in place gives you the
+worst of both.
+
+**Where to run it, free:**
+
+| Host | Free? | Fits | Notes |
+|---|---|---|---|
+| **Oracle Cloud Always Free** | Forever, no expiry | Full | 4 ARM cores, **24 GB**. Best free option that exists. |
+| **Google Cloud Run** | Within free tier | Full at 1 GiB | Card required. Scales to zero; ~15 s cold start. |
+| Render / Koyeb / Fly free | Yes | **Lite only** | 512 MB. Full profile OOMs. |
+| Vercel / Netlify / Pages | Yes | Frontend | Static bundle, 73 KB gzipped. |
+| Serverless functions | Yes | Neither | No persistent process; torch exceeds the bundle limit. |
+| PythonAnywhere free | Yes | Neither | Whitelists outbound HTTP — PubMed and arXiv unreachable. |
+
+**Oracle Cloud Always Free is the recommendation.** No expiry, no sleep, no cold
+start, and 24 GB against an 865 MB peak. The A1 shapes are ARM64, which matters for a
+PyTorch service — checked, and it is fine: `torch-2.5.1-cp312 … aarch64` exists on the
+exact CPU index `backend/Dockerfile` pins, and spaCy and scikit-learn ship aarch64
+wheels too, so **the image builds unmodified**. Build it *on* the instance; buildx
+under QEMU works and takes an hour.
+
+Three Oracle-specific things go wrong: A1 capacity is often exhausted in busy regions
+and your home region is fixed at signup; idle Always Free compute is reclaimed after
+seven days, which is exactly the profile of a demo nobody visits (a free
+Pay-As-You-Go upgrade exempts you and still costs nothing); and the firewall exists
+in two places — Oracle's images ship iptables rules that silently drop traffic the
+Security List allows.
+
+```bash
+# on an Ubuntu A1 instance, ports 80/443 already open in the Security List
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80  -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
+
+git clone https://github.com/zainabraza06/PaperPilot && cd PaperPilot
+printf 'PAPERPILOT_MISTRAL_API_KEY=%s\n' "$KEY" > .env
+docker compose up --build -d
+```
+
+Compose runs both containers on one network with nginx proxying `/api` by service
+name, so the app is **same-origin** and needs no `VITE_API_BASE` and no
+`PAPERPILOT_CORS_ORIGINS` at all.
+
+**Split hosting** (static frontend elsewhere, backend on a PaaS) needs both:
+`VITE_API_BASE` at frontend *build* time, and `PAPERPILOT_CORS_ORIGINS` on the
+backend — which accepts a bare URL, a comma-separated list or a JSON array. The one
+command that proves it works is the preflight, because a missing CORS header fails
+only in a browser:
+
+```bash
+curl -si -X OPTIONS "$API/api/search" \
+  -H "Origin: https://your-frontend" \
+  -H "Access-Control-Request-Method: GET" | grep -i access-control-allow-origin
+```
 
 ### Without the frontend
 
@@ -1099,7 +1171,8 @@ All checks passed.        # 42 assertions across light, dark and mobile
 It also verifies the *downloaded file*, not just that a button was clickable: the
 export must contain exactly the two selected papers as BibTeX entries.
 
-The screenshots above are what that run produced.
+The run also writes a screenshot gallery, which is how the four defects listed under
+*Known limitations* below were found — none of them failed an assertion.
 
 ### On latency, honestly
 
@@ -1262,14 +1335,6 @@ and the compose stack has not been exercised end to end. Treat the
 frontend image and the nginx configuration as verified and the backend
 image as reviewed but unbuilt.
 
-### Recording a demo
-
-[`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) is a shot-by-shot script for a
-4–5 minute screen recording: what to show, in what order, what to say over
-the loading state, and — the part that matters — which numbers not to
-overclaim.
-
----
 
 ## Testing
 
