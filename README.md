@@ -1,5 +1,7 @@
 # PaperPilot
 
+[![CI](https://github.com/zainabraza06/PaperPilot/actions/workflows/ci.yml/badge.svg)](https://github.com/zainabraza06/PaperPilot/actions/workflows/ci.yml)
+
 AI-powered scientific literature search across **PubMed**, **arXiv** and **Crossref** —
 one query, one ranked list, AI summaries, one-click citation export.
 
@@ -1445,6 +1447,23 @@ cd ../frontend
 npm run contrast          # WCAG audit of the palette, both themes
 npm run verify            # drive a real browser, 42 assertions
 ```
+
+Every push runs ruff, mypy and the full pytest suite, plus the frontend's
+type-check, lint, contrast audit and build
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+CI also enforces the **generated-types chain**, which is the one thing a reviewer
+cannot check by reading: the backend job regenerates `openapi.json` from the Pydantic
+models and fails if the committed schema has drifted, and the frontend job
+regenerates `src/types/api.ts` from that schema and fails if *it* has drifted.
+Together they prove the TypeScript still describes the Python. Both halves were
+tested by deliberately breaking them.
+
+**The browser harness is deliberately not in CI.** It drives the real app against
+PubMed, arXiv and Crossref, and arXiv rate-limits by IP — a CI runner is the most
+shared address there is. A suite that fails for reasons unrelated to the change
+teaches people to ignore it, so `npm run verify` stays a local command and this
+limitation is stated rather than hidden behind a green badge.
 
 Tests are offline and deterministic. Connector parsing runs against recorded upstream
 payloads in `tests/fixtures/`, chosen to include the awkward records (no abstract, no
