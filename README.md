@@ -169,6 +169,11 @@ cd ../frontend && npx openapi-typescript openapi.json -o src/types/api.ts
                         └────────────┬─────────────┘
                                      ▼
                         ┌──────────────────────────┐
+                        │     AbstractBackfill     │  OpenAlex, batched;
+                        │  (fills what is missing) │  before anything scores
+                        └────────────┬─────────────┘
+                                     ▼
+                        ┌──────────────────────────┐
                         │       HybridRanker       │  embeddings + BM25,
                         │   (fusion strategies)    │  fused and scored
                         └────────────┬─────────────┘
@@ -192,6 +197,11 @@ cd ../frontend && npx openapi-typescript openapi.json -o src/types/api.ts
                                      ▼
                        BibTeX · RIS · APA · Vancouver
 ```
+
+The whole response is also cached, keyed on the query *and* a fingerprint of the
+settings that change what a search returns. A repeated query skips every box above:
+**13.9s → 0.04s**, measured against the live APIs. See
+[Caching the whole search](#caching-the-whole-search).
 
 The embedder is shared between the ranker and the clusterer behind an LRU cache, so
 a result set is embedded once per search rather than twice.
@@ -303,7 +313,8 @@ bi-encoder smooths them toward their neighbourhood.
 
 Both scorers see the *same* view of a paper ([`document.py`](backend/app/services/ranking/document.py)) —
 title (repeated once, as a mild weighting), then abstract, or keywords and venue for
-the ~half of Crossref records that have no abstract deposited.
+the records that still have no abstract after the backfill below — 10% of the pool,
+down from 19%.
 
 The ranker is given the user's **raw** query, not the keyword string sent upstream.
 That is the whole reason [`query_parser.py`](backend/app/services/query_parser.py)
@@ -335,8 +346,8 @@ pool cannot silently reassign a grade to a different paper.
 
 **Recall@k has a ceiling below 1.0 here.** Most queries have more relevant papers than
 *k*, and Recall@k cannot exceed `min(k, |relevant|) / |relevant|`. On this set the
-ceilings are **R@5 ≤ 0.376, R@10 ≤ 0.669, R@20 ≤ 0.991**. So hybrid's 0.630 at k=10 is
-**94% of the best any ranking could do**, not 63% of some ideal. Fourteen of the twenty
+ceilings are **R@5 ≤ 0.376, R@10 ≤ 0.669, R@20 ≤ 0.991**. So hybrid's 0.628 at k=10 is
+**94% of the best any ranking could do**, not 63% of some ideal. Thirteen of the twenty
 queries hit 100% of their ceiling at k=10. The evaluator reports the ceiling on every
 run so a correct number is not misread as a bad one.
 
@@ -1203,8 +1214,46 @@ two-call `esearch`/`efetch` pattern, so it is as low as it can go without cuttin
 a healthy source. Summarization is the other real cost, and it is paid once per paper
 thanks to the SQLite cache.
 
+That is the cost of a *cold* search. A repeated one is served from the response cache
+in ~40ms (below), which is what makes the app usable in practice — but the cold path
+is the honest number to quote, because it is what a new query costs.
+
 Streaming results as each source lands would fix the perceived wait properly. That is
 an architectural change, not a polish item, and it is not done.
+
+### Caching the whole search
+
+The summary cache saves the expensive per-paper work. Everything else — the fan-out,
+deduplication, backfill, ranking, clustering, NER — re-ran on every repeated query,
+and the fan-out alone is bounded by the slowest of three upstream APIs.
+
+```
+first search   13.9s    59 papers, cache miss
+repeat          0.04s   same 59 papers, cache hit
+```
+
+Three reasons it is the right thing rather than a demo trick. NCBI, Crossref and arXiv
+all ask clients to cache and avoid re-requesting identical data — and arXiv rate-limits
+by IP with a block that outlasts its documented window, so a deployment on a shared
+address that re-fetches constantly is asking to be cut off. The literature does not
+change in an hour. And a first impression is decided by the first query.
+
+**A degraded response is never cached.** That is the design, not a detail: storing a
+result where arXiv timed out turns one bad minute into a bad hour, and hands everyone
+in that window a two-source answer with no way to retry into a good one. A transient
+failure costs exactly as long as it lasts.
+
+The key covers a **configuration fingerprint** as well as the query — ranking strategy,
+alpha, embedding model, summary model — for the same reason the summary cache keys on
+`prompt_version`: a response produced under a different setting is a different answer,
+and serving it after the setting changes would silently undo the change. Whitespace and
+case do not defeat it; limit and source selection do.
+
+And it reports itself. This app's claim is that you can see what each stage did, so a
+cache that quietly served four-minute-old results while the pipeline panel described a
+fan-out that never happened would contradict the one thing that panel is for. The panel
+reads *"cached · 4m ago"*, and `elapsed_ms` is re-stamped with what the request actually
+took rather than replaying the original timing.
 
 ### Known limitations
 
@@ -1435,6 +1484,7 @@ Interactive docs at `/docs` when the server is running.
 **Ranking** sentence-transformers (`all-MiniLM-L6-v2`) · rank-bm25 · NumPy
 **Enrichment** spaCy (SciSpacy-ready) · scikit-learn (Ward agglomerative)
 **Summarization** Mistral API via httpx · deterministic grounding check · SQLite cache
+**Caching** SQLite for summaries, papers and whole search responses, keyed on a config fingerprint
 **Export** BibTeX · RIS · APA 7th · Vancouver, validated against independent parsers
 **Frontend** React 19 · TypeScript (strict) · Tailwind (semantic tokens) · Vite · types generated from OpenAPI
 **Testing** pytest · pytest-asyncio · respx · bibtexparser · rispy · ruff · mypy (strict) · Playwright · WCAG contrast audit
