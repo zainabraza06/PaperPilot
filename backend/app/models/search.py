@@ -147,6 +147,26 @@ class RankingReport(ApiModel):
     reason: str | None = Field(default=None, description="Why ranking did not run.")
 
 
+class CacheReport(ApiModel):
+    """Whether this response came from the search cache.
+
+    Reported rather than silent, for the same reason every other stage
+    reports: this app's whole claim is that you can see what it did. A
+    cache that quietly served four-minute-old results while the pipeline
+    panel described a fan-out that did not happen would contradict that
+    directly — and the age is exactly what a user needs to decide whether
+    to care.
+    """
+
+    hit: bool = False
+    age_seconds: int | None = Field(
+        default=None, description="How long ago the cached response was produced."
+    )
+    ttl_seconds: int | None = Field(
+        default=None, description="How long a cached response stays servable."
+    )
+
+
 class SearchRequest(ApiModel):
     """Inbound search parameters."""
 
@@ -178,6 +198,7 @@ class SearchResponse(ApiModel):
     summaries: SummaryReport = Field(
         default_factory=lambda: SummaryReport(applied=False)
     )
+    cache: CacheReport = Field(default_factory=CacheReport)
 
     @property
     def degraded(self) -> bool:

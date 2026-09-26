@@ -34,6 +34,7 @@ from app.services.summarization.summarizer import PaperSummarizer
 from app.services.summarization.support import SemanticSupportChecker
 from app.sources.registry import SourceRegistry
 from app.storage.paper_store import PaperStore
+from app.storage.search_cache import SearchCache
 from app.storage.summary_cache import SummaryCache
 
 logger = get_logger(__name__)
@@ -60,6 +61,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     paper_store = (
         PaperStore(settings.paper_store_path) if settings.paper_store_path else None
     )
+    search_cache = _build_search_cache(settings)
 
     app.state.registry = registry
     app.state.embedder = embedder
@@ -69,18 +71,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.summary_cache = cache
     app.state.summarizer = summarizer
     app.state.paper_store = paper_store
+    app.state.search_cache = search_cache
     app.state.search_service = SearchService(
-        registry, settings, ranker, extractor, clusterer, summarizer, paper_store
+        registry,
+        settings,
+        ranker,
+        extractor,
+        clusterer,
+        summarizer,
+        paper_store,
+        search_cache,
     )
     logger.info(
         "%s started | sources: %s | ranking: %s | entities: %s | clustering: %s "
-        "| summaries: %s",
+        "| summaries: %s | search cache: %s",
         settings.app_name,
         ", ".join(source.display_name for source in registry.all()),
         f"{ranker.strategy.value} on {ranker.model_id}" if ranker else "disabled",
         extractor.model_id if extractor else "disabled",
         "on" if clusterer else "disabled",
         summarizer.model_id if summarizer else "disabled",
+        f"{search_cache.ttl_seconds}s ttl" if search_cache else "disabled",
     )
     try:
         yield
@@ -88,6 +99,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await registry.aclose()
         if cache is not None:
             cache.close()
+        if search_cache is not None:
+            search_cache.close()
         if paper_store is not None:
             paper_store.close()
         logger.info("shutdown complete")
@@ -129,6 +142,20 @@ async def _build_entity_extractor(settings: Settings) -> EntityExtractor | None:
     if not settings.entities_enabled:
         return None
     return await asyncio.to_thread(build_entity_extractor, settings.ner_model)
+
+
+def _build_search_cache(settings: Settings) -> SearchCache | None:
+    """Open the SQLite search cache, or ``None`` if caching is off.
+
+    A zero TTL is treated as off rather than as "expire immediately", so
+    disabling the cache does not leave a table growing with rows nothing
+    will ever read.
+    """
+    if not settings.search_cache_enabled or settings.search_cache_ttl_seconds <= 0:
+        return None
+    if not settings.search_cache_path:
+        return None
+    return SearchCache(settings.search_cache_path, settings.search_cache_ttl_seconds)
 
 
 def _build_summary_cache(settings: Settings) -> SummaryCache | None:

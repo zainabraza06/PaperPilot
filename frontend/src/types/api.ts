@@ -158,6 +158,34 @@ export interface components {
             affiliation: string | null;
         };
         /**
+         * CacheReport
+         * @description Whether this response came from the search cache.
+         *
+         *     Reported rather than silent, for the same reason every other stage
+         *     reports: this app's whole claim is that you can see what it did. A
+         *     cache that quietly served four-minute-old results while the pipeline
+         *     panel described a fan-out that did not happen would contradict that
+         *     directly — and the age is exactly what a user needs to decide whether
+         *     to care.
+         */
+        CacheReport: {
+            /**
+             * Hit
+             * @default false
+             */
+            hit: boolean;
+            /**
+             * Age Seconds
+             * @description How long ago the cached response was produced.
+             */
+            age_seconds: number | null;
+            /**
+             * Ttl Seconds
+             * @description How long a cached response stays servable.
+             */
+            ttl_seconds: number | null;
+        };
+        /**
          * ClusteringReport
          * @description Whether clustering ran, and how it went.
          *
@@ -582,6 +610,7 @@ export interface components {
             clustering: components["schemas"]["ClusteringReport"];
             entities: components["schemas"]["EnrichmentReport"];
             summaries: components["schemas"]["SummaryReport"];
+            cache: components["schemas"]["CacheReport"];
         };
         /** SourceInfo */
         SourceInfo: {

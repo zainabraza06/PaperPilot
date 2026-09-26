@@ -189,6 +189,27 @@ class Settings(BaseSettings):
             "built from the abstract's own words. Set 0 to disable it."
         ),
     )
+    search_cache_enabled: bool = Field(
+        default=True,
+        description=(
+            "Serve repeated searches from a short-lived cache instead of "
+            "re-querying every upstream API."
+        ),
+    )
+    search_cache_ttl_seconds: int = Field(
+        default=3600,
+        ge=0,
+        description=(
+            "How long a cached search stays servable. An hour: the literature "
+            "does not change faster than that, and a stale-by-an-hour result "
+            "is a far smaller cost than being rate-limited by arXiv."
+        ),
+    )
+    search_cache_path: str = Field(
+        default="data/paperpilot.db",
+        description="SQLite file for cached search responses.",
+    )
+
     summary_cache_path: str = Field(
         default="data/paperpilot.db",
         description="SQLite file for cached summaries. Empty disables caching.",

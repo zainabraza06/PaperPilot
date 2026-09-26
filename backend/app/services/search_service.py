@@ -35,6 +35,7 @@ from app.models.clusters import ClusteringReport, TopicCluster
 from app.models.entities import Entity
 from app.models.paper import Paper, SourceName
 from app.models.search import (
+    CacheReport,
     EnrichmentReport,
     IdentifierKind,
     ParsedQuery,
@@ -56,6 +57,7 @@ from app.services.summarization.summarizer import PaperSummarizer
 from app.sources.base import PaperSource, SupportsArxivLookup, SupportsPmidLookup
 from app.sources.registry import SourceRegistry
 from app.storage.paper_store import PaperStore
+from app.storage.search_cache import SearchCache, cache_key
 
 logger = get_logger(__name__)
 
@@ -72,6 +74,7 @@ class SearchService:
         clusterer: TopicClusterer | None = None,
         summarizer: PaperSummarizer | None = None,
         paper_store: PaperStore | None = None,
+        search_cache: SearchCache | None = None,
     ) -> None:
         self._registry = registry
         self._settings = settings
@@ -80,11 +83,31 @@ class SearchService:
         self._clusterer = clusterer
         self._summarizer = summarizer
         self._paper_store = paper_store
+        self._search_cache = search_cache
 
     async def search(self, request: SearchRequest) -> SearchResponse:
         started = time.perf_counter()
         parsed = parse_query(request.query)
         sources = self._registry.select(request.sources)
+
+        # Bound once so the None-check narrows for the whole block: a
+        # cache hit can only exist when there is a cache to hit.
+        cache = self._search_cache
+        key = self._cache_key(request)
+        if cache is not None and key is not None:
+            cached = await self._cached(key)
+            if cached is not None:
+                response, age = cached
+                # elapsed_ms is rewritten to what *this* request actually
+                # took. Replaying the original seven seconds would make the
+                # cache invisible in exactly the panel built to show where
+                # the time goes.
+                response.elapsed_ms = int((time.perf_counter() - started) * 1000)
+                response.cache = CacheReport(
+                    hit=True, age_seconds=age, ttl_seconds=cache.ttl_seconds
+                )
+                logger.info("search served from cache (age %ss)", age)
+                return response
 
         logger.info(
             "search intent=%s terms=%r sources=%s",
@@ -117,7 +140,7 @@ class SearchService:
         await self._remember(papers)
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
-        return SearchResponse(
+        response = SearchResponse(
             query=parsed,
             papers=papers,
             total=len(papers),
@@ -129,7 +152,73 @@ class SearchService:
             clustering=clustering,
             entities=entities,
             summaries=summary_report,
+            cache=CacheReport(
+                hit=False,
+                ttl_seconds=self._search_cache.ttl_seconds if self._search_cache else None,
+            ),
         )
+        await self._cache(key, response)
+        return response
+
+    # --- caching ---------------------------------------------------------
+
+    def _cache_key(self, request: SearchRequest) -> str | None:
+        if self._search_cache is None:
+            return None
+        return cache_key(
+            request.query,
+            request.limit_per_source,
+            request.sources,
+            self._config_fingerprint(),
+        )
+
+    def _config_fingerprint(self) -> str:
+        """Everything that changes what a search *returns*, not how fast.
+
+        A response produced under a different ranking strategy or a
+        different summary model is a different answer, so it must not be
+        served after the setting changes — the same reason the summary
+        cache keys on ``prompt_version``. Timeouts and log levels are
+        deliberately absent: they change latency, not results.
+        """
+        settings = self._settings
+        parts = [
+            settings.ranking_strategy,
+            f"{settings.ranking_alpha:.3f}",
+            settings.embedding_model or "none",
+            settings.summary_model if settings.mistral_api_key else "extractive",
+            str(settings.entities_enabled),
+        ]
+        return "|".join(parts)
+
+    async def _cached(self, key: str | None) -> tuple[SearchResponse, int] | None:
+        """Look up a cached response, treating any failure as a miss."""
+        if self._search_cache is None or key is None:
+            return None
+        try:
+            return await asyncio.to_thread(self._search_cache.get, key)
+        except Exception:
+            logger.exception("search cache lookup failed; falling through to a live search")
+            return None
+
+    async def _cache(self, key: str | None, response: SearchResponse) -> None:
+        """Store a response, but only a complete one.
+
+        A degraded response must never be cached. If arXiv timed out,
+        storing that for an hour turns one bad minute into a bad hour and
+        hands every user in the window a two-source answer with no way to
+        retry into a good one. A transient upstream failure should cost
+        exactly as long as it lasts.
+        """
+        if self._search_cache is None or key is None:
+            return
+        if response.degraded:
+            logger.debug("not caching a degraded response")
+            return
+        try:
+            await asyncio.to_thread(self._search_cache.put, key, response)
+        except Exception:
+            logger.exception("could not cache the search response")
 
     async def _remember(self, papers: list[Paper]) -> None:
         """Persist the fully enriched papers so they can be exported later.

@@ -20,7 +20,10 @@ import path from 'node:path'
 import { chromium } from 'playwright'
 
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173'
-const OUT = path.resolve(process.cwd(), '..', 'docs', 'screenshots')
+// Local artefacts, not repo content: the gallery is for looking at while
+// working, and committing a few hundred KB of PNGs on every UI change is
+// noise in the history.
+const OUT = path.resolve(process.cwd(), '.screenshots')
 const QUERY = 'CRISPR prime editing efficiency in human cells'
 
 /** Fail the run rather than quietly producing a screenshot of nothing. */
@@ -80,12 +83,26 @@ async function main() {
 
     await page.getByRole('button', { name: 'Search', exact: true }).click()
 
-    check(
-      await page.getByText(/Searching PubMed, arXiv and Crossref/i).isVisible(),
-      'loading state names the sources being queried',
-    )
-    if (theme === 'light') {
-      await page.screenshot({ path: path.join(OUT, '03-loading.png') })
+    // The loading banner is only observable on a cold search. Once the
+    // response cache is warm the results are back in ~40ms, and asserting
+    // the banner unconditionally would fail for the best possible reason.
+    // Either outcome is correct; only "neither" is a bug.
+    const loading = page.getByText(/Searching PubMed, arXiv and Crossref/i)
+    const banner = await loading
+      .waitFor({ state: 'visible', timeout: 1500 })
+      .then(() => true)
+      .catch(() => false)
+    if (banner) {
+      check(true, 'loading state names the sources being queried')
+      if (theme === 'light') {
+        await page.screenshot({ path: path.join(OUT, '03-loading.png') })
+      }
+    } else {
+      await page.waitForSelector('article', { timeout: 120_000 })
+      check(
+        await page.getByText(/cached/i).first().isVisible(),
+        'served from cache, so fast the loading state never showed',
+      )
     }
 
     // A three-source fan-out plus ranking, clustering, NER and summaries.
@@ -190,6 +207,17 @@ async function main() {
     check(
       await page.getByText('Recent searches').isVisible(),
       'search history sidebar is present',
+    )
+
+    // Re-run the identical query. The fan-out must not happen again, and
+    // the pipeline panel must say so rather than quietly serving old data.
+    const startedAt = Date.now()
+    await page.getByRole('button', { name: 'Search', exact: true }).click()
+    await page.waitForSelector('article', { timeout: 120_000 })
+    const repeatMs = Date.now() - startedAt
+    check(
+      await page.getByText(/cached/i).first().isVisible(),
+      `repeat search reports itself as cached (${repeatMs}ms)`,
     )
 
     check(consoleErrors.length === 0, `no console errors (${consoleErrors.length})`)

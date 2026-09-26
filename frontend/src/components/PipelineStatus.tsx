@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import type { SearchResponse } from '@/types/domain'
+import type { CacheReport, SearchResponse } from '@/types/domain'
 import { SOURCE_LABELS, SOURCE_STATUS_COPY } from '@/types/domain'
 
 import { Badge, cx } from './primitives'
@@ -73,6 +73,19 @@ export function PipelineStatus({ response }: { response: SearchResponse }) {
             </>
           ) : null}{' '}
           · {(response.elapsed_ms / 1000).toFixed(1)}s
+          {/* A cache that served four-minute-old results while the panel
+              described a fan-out that did not happen would contradict the
+              one thing this component exists for. The age is what a reader
+              needs in order to decide whether to care. */}
+          {response.cache.hit ? (
+            <>
+              {' '}
+              ·{' '}
+              <span className="font-medium text-accent-600" title={cacheTitle(response.cache)}>
+                cached{ageSuffix(response.cache.age_seconds)}
+              </span>
+            </>
+          ) : null}
           {degraded ? (
             <>
               {' '}
@@ -221,4 +234,19 @@ function Row({
       </dd>
     </div>
   )
+}
+
+/** "cached · 4m ago" reads better than a raw second count on every row. */
+function ageSuffix(seconds: number | null | undefined): string {
+  if (seconds === null || seconds === undefined) return ''
+  if (seconds < 60) return ' just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return ` ${minutes}m ago`
+  return ` ${Math.floor(minutes / 60)}h ago`
+}
+
+function cacheTitle(cache: CacheReport): string {
+  const ttl = cache.ttl_seconds ? Math.round(cache.ttl_seconds / 60) : null
+  const base = 'Served from the search cache — the three sources were not queried again'
+  return ttl ? `${base}. Cached results are reused for up to ${ttl} minutes.` : base
 }

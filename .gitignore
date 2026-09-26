@@ -11,6 +11,7 @@ venv/
 htmlcov/
 
 # --- Node / frontend ---
+.screenshots/
 node_modules/
 dist/
 .vite/
