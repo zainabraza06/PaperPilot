@@ -1,1 +1,1597 @@
-{"openapi":"3.1.0","info":{"title":"PaperPilot","summary":"AI-powered scientific literature search across PubMed, arXiv and Crossref.","version":"0.1.0"},"paths":{"/health":{"get":{"tags":["system"],"summary":"Liveness and configured sources","description":"Report liveness plus which connectors this instance has registered.\n\nThe source list is part of the health payload because the frontend uses\nit to render source filters without hardcoding provider names.","operationId":"health_health_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HealthResponse"}}}}}}},"/api/search":{"get":{"tags":["search"],"summary":"Search PubMed, arXiv and Crossref in one query","description":"Fan out to every source, merge, deduplicate, and report per-source status.","operationId":"search_api_search_get","parameters":[{"name":"q","in":"query","required":true,"schema":{"type":"string","minLength":1,"maxLength":8000,"description":"Topic, keyword, DOI or abstract","title":"Q"},"description":"Topic, keyword, DOI or abstract"},{"name":"limit_per_source","in":"query","required":false,"schema":{"type":"integer","maximum":100,"minimum":1,"default":20,"title":"Limit Per Source"}},{"name":"sources","in":"query","required":false,"schema":{"anyOf":[{"type":"array","items":{"$ref":"#/components/schemas/SourceName"}},{"type":"null"}],"title":"Sources"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/SearchResponse"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}},"post":{"tags":["search"],"summary":"Search with a JSON body","description":"POST variant, for abstract snippets too long to sit in a query string.","operationId":"search_post_api_search_post","requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/SearchRequest"}}}},"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/SearchResponse"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/parse":{"get":{"tags":["search"],"summary":"Show how a query would be interpreted","description":"Expose the query classifier so the UI can show the detected input type.","operationId":"parse_api_parse_get","parameters":[{"name":"q","in":"query","required":true,"schema":{"type":"string","minLength":1,"maxLength":8000,"title":"Q"}}],"responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"$ref":"#/components/schemas/ParsedQuery"}}}},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/export":{"post":{"tags":["export"],"summary":"Export several papers as a citation file","description":"Render the selected papers in the requested citation format.\n\nPapers are looked up from the store rather than accepted in the\nrequest body, so a citation can only be produced for a record the\nserver actually retrieved.","operationId":"export_many_api_export_post","requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ExportRequest"}}},"required":true},"responses":{"200":{"description":"Successful Response"},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/export/{paper_id}":{"get":{"tags":["export"],"summary":"Export a single paper","description":"Render one paper. A GET so it can be a plain link in the UI.","operationId":"export_one_api_export__paper_id__get","parameters":[{"name":"paper_id","in":"path","required":true,"schema":{"type":"string","title":"Paper Id"}},{"name":"format","in":"query","required":false,"schema":{"$ref":"#/components/schemas/ExportFormat","default":"bibtex"}}],"responses":{"200":{"description":"Successful Response"},"422":{"description":"Validation Error","content":{"application/json":{"schema":{"$ref":"#/components/schemas/HTTPValidationError"}}}}}}},"/api/export/formats/available":{"get":{"tags":["export"],"summary":"List the supported citation formats","description":"Let the UI build its format picker without hardcoding the list.","operationId":"list_formats_api_export_formats_available_get","responses":{"200":{"description":"Successful Response","content":{"application/json":{"schema":{"items":{"additionalProperties":{"type":"string"},"type":"object"},"type":"array","title":"Response List Formats Api Export Formats Available Get"}}}}}}}},"components":{"schemas":{"Author":{"properties":{"name":{"type":"string","title":"Name"},"given":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Given"},"family":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Family"},"affiliation":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Affiliation"}},"type":"object","required":["name","given","family","affiliation"],"title":"Author","description":"A paper author.\n\n``given``/``family`` are kept separate whenever the source provides them\nbecause citation formats (BibTeX, RIS) need the split. ``name`` is the\ndisplay form and is always populated."},"CacheReport":{"properties":{"hit":{"type":"boolean","title":"Hit","default":false},"age_seconds":{"anyOf":[{"type":"integer"},{"type":"null"}],"title":"Age Seconds","description":"How long ago the cached response was produced."},"ttl_seconds":{"anyOf":[{"type":"integer"},{"type":"null"}],"title":"Ttl Seconds","description":"How long a cached response stays servable."}},"type":"object","required":["hit","age_seconds","ttl_seconds"],"title":"CacheReport","description":"Whether this response came from the search cache.\n\nReported rather than silent, for the same reason every other stage\nreports: this app's whole claim is that you can see what it did. A\ncache that quietly served four-minute-old results while the pipeline\npanel described a fan-out that did not happen would contradict that\ndirectly — and the age is exactly what a user needs to decide whether\nto care."},"ClusteringReport":{"properties":{"applied":{"type":"boolean","title":"Applied"},"algorithm":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Algorithm"},"clusters":{"type":"integer","title":"Clusters","default":0},"silhouette":{"anyOf":[{"type":"number"},{"type":"null"}],"title":"Silhouette"},"elapsed_ms":{"type":"integer","title":"Elapsed Ms","default":0},"reason":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Reason","description":"Why clustering did not run."}},"type":"object","required":["applied","algorithm","clusters","silhouette","elapsed_ms","reason"],"title":"ClusteringReport","description":"Whether clustering ran, and how it went.\n\nMirrors ``RankingReport``: an enrichment that did not happen is a state\nthe UI has to render, not an error to swallow. A result set too small\nto cluster is normal, not a failure."},"EnrichmentReport":{"properties":{"applied":{"type":"boolean","title":"Applied"},"model":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Model"},"entities_found":{"type":"integer","title":"Entities Found","default":0},"elapsed_ms":{"type":"integer","title":"Elapsed Ms","default":0},"reason":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Reason"}},"type":"object","required":["applied","model","entities_found","elapsed_ms","reason"],"title":"EnrichmentReport","description":"Whether entity extraction ran, and with what model.\n\nSame contract as the ranking and clustering reports: the frontend\nrenders \"entities unavailable\" differently from \"this paper has none\"."},"Entity":{"properties":{"text":{"type":"string","title":"Text","description":"Surface form, as it appears in the text."},"label":{"$ref":"#/components/schemas/EntityLabel"},"raw_label":{"type":"string","title":"Raw Label","description":"The label the underlying model emitted."},"spans":{"items":{"$ref":"#/components/schemas/EntitySpan"},"type":"array","title":"Spans"}},"type":"object","required":["text","label","raw_label","spans"],"title":"Entity","description":"A distinct entity mentioned in a paper, with all its occurrences."},"EntityLabel":{"type":"string","enum":["gene_or_protein","disease","chemical","organism","anatomy","cell_type","technical_term","organization","person","location","other"],"title":"EntityLabel","description":"Entity categories, normalized across NER models.\n\nDifferent models emit wildly different label sets — ``en_core_web_sm``\nis trained on news (ORG, PERSON, GPE), while SciSpacy models emit\nbiomedical types (DISEASE, CHEMICAL, GENE_OR_GENE_PRODUCT). Everything\nis mapped onto this enum so the API contract and the UI do not change\nwhen the underlying model does."},"EntitySpan":{"properties":{"field":{"type":"string","enum":["title","abstract"],"title":"Field"},"start":{"type":"integer","minimum":0.0,"title":"Start"},"end":{"type":"integer","minimum":0.0,"title":"End"}},"type":"object","required":["field","start","end"],"title":"EntitySpan","description":"One occurrence of an entity, as character offsets into a field."},"ExportFormat":{"type":"string","enum":["bibtex","ris","apa","vancouver"],"title":"ExportFormat","description":"Formats a user can ask for.\n\nAPA and Vancouver are separate members rather than a style parameter\non one member: from the caller's point of view they are two different\nthings to click, and modelling them as one format with a modifier\npushes that distinction into every caller."},"ExportRequest":{"properties":{"paper_ids":{"items":{"type":"string"},"type":"array","maxItems":500,"minItems":1,"title":"Paper Ids"},"format":{"$ref":"#/components/schemas/ExportFormat","default":"bibtex"},"filename":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Filename","description":"Base name for the download, without extension."}},"type":"object","required":["paper_ids"],"title":"ExportRequest","description":"A bulk export of previously retrieved papers."},"GroundingIssue":{"properties":{"kind":{"$ref":"#/components/schemas/IssueKind"},"detail":{"type":"string","title":"Detail","description":"Human-readable explanation, safe to show a user."},"severity":{"$ref":"#/components/schemas/IssueSeverity","default":"blocking"},"span":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Span","description":"The offending text from the summary, if localizable."}},"type":"object","required":["kind","detail","severity","span"],"title":"GroundingIssue","description":"One specific, located problem found in a summary."},"GroundingStatus":{"type":"string","enum":["grounded","ungrounded","unverifiable"],"title":"GroundingStatus","description":"Outcome of checking a summary against its source abstract."},"GroundingVerdict":{"properties":{"status":{"$ref":"#/components/schemas/GroundingStatus"},"issues":{"items":{"$ref":"#/components/schemas/GroundingIssue"},"type":"array","title":"Issues"},"overlap":{"type":"number","maximum":1.0,"minimum":0.0,"title":"Overlap","default":0.0}},"type":"object","required":["status","issues","overlap"],"title":"GroundingVerdict","description":"The full result of checking one summary against one abstract."},"HTTPValidationError":{"properties":{"detail":{"items":{"$ref":"#/components/schemas/ValidationError"},"type":"array","title":"Detail"}},"type":"object","title":"HTTPValidationError"},"HealthResponse":{"properties":{"status":{"type":"string","title":"Status"},"app":{"type":"string","title":"App"},"environment":{"type":"string","title":"Environment"},"sources":{"items":{"$ref":"#/components/schemas/SourceInfo"},"type":"array","title":"Sources"}},"type":"object","required":["status","app","environment","sources"],"title":"HealthResponse"},"IdentifierKind":{"type":"string","enum":["doi","arxiv","pmid"],"title":"IdentifierKind"},"IssueKind":{"type":"string","enum":["fabricated_number","fabricated_entity","low_overlap","contradicted_direction","overclaim","unsupported_claim","format"],"title":"IssueKind","description":"The specific way a summary failed to trace back to its abstract.\n\nKept as a closed vocabulary rather than free text so the failures can\nbe counted, tested, and shown in the UI as a reason rather than a\ngeneric warning."},"IssueSeverity":{"type":"string","enum":["blocking","advisory"],"title":"IssueSeverity","description":"Whether an issue rejects a summary or merely annotates it.\n\nThe split is earned by measurement, not taste. The lexical rules have a\n0.8% false-positive rate, so a summary that trips one is almost\ncertainly wrong and replacing it is right.\n\nThe semantic support check is far noisier, because a genuinely\nabstractive summary and a recombined claim look much alike to a\nsimilarity threshold. Measured against live generation on 94 papers, a\nthreshold strict enough to catch most recombinations (0.70) cautions\n**43.6%** of perfectly good summaries; the shipped 0.50 cautions 5% and\ncatches 61%. Blocking on a signal that noisy would destroy more good\nsummaries than it saves bad ones — so it annotates instead, and the\nreader is told which sentence to look at twice."},"Paper":{"properties":{"id":{"type":"string","title":"Id","description":"Stable fingerprint, derived from DOI or source id."},"doi":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Doi","description":"Lowercased, bare DOI (no URL prefix)."},"source":{"$ref":"#/components/schemas/SourceName","description":"Provider this record was retrieved from."},"source_id":{"type":"string","title":"Source Id","description":"Provider-native identifier (PMID, arXiv id, DOI)."},"title":{"type":"string","title":"Title"},"authors":{"items":{"$ref":"#/components/schemas/Author"},"type":"array","title":"Authors"},"abstract":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Abstract"},"published_date":{"anyOf":[{"type":"string","format":"date"},{"type":"null"}],"title":"Published Date"},"url":{"type":"string","title":"Url"},"journal":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Journal"},"publisher":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Publisher"},"volume":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Volume"},"issue":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Issue"},"pages":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Pages"},"publication_type":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Publication Type"},"keywords":{"items":{"type":"string"},"type":"array","title":"Keywords"},"pdf_url":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Pdf Url"},"citation_count":{"anyOf":[{"type":"integer"},{"type":"null"}],"title":"Citation Count"},"score":{"anyOf":[{"$ref":"#/components/schemas/RelevanceScore"},{"type":"null"}]},"summary":{"anyOf":[{"$ref":"#/components/schemas/Summary"},{"type":"null"}],"description":"AI or extractive summary, carrying its own grounding verdict."},"entities":{"items":{"$ref":"#/components/schemas/Entity"},"type":"array","title":"Entities","description":"Named entities found in the title and abstract, with spans."},"cluster_id":{"anyOf":[{"type":"integer"},{"type":"null"}],"title":"Cluster Id","description":"Index of the topic cluster this paper was assigned to."},"also_found_in":{"items":{"$ref":"#/components/schemas/SourceName"},"type":"array","title":"Also Found In","description":"Other sources that returned this same work."}},"type":"object","required":["id","doi","source","source_id","title","authors","abstract","published_date","url","journal","publisher","volume","issue","pages","publication_type","keywords","pdf_url","citation_count","score","summary","entities","cluster_id","also_found_in"],"title":"Paper","description":"A single scientific work, normalized across all sources.\n\nOptionality is deliberate and pervasive: real-world records routinely\nlack an abstract, a DOI, or a usable publication date, and the pipeline\nmust degrade gracefully rather than drop those records."},"ParsedQuery":{"properties":{"raw":{"type":"string","title":"Raw"},"intent":{"$ref":"#/components/schemas/QueryIntent"},"search_terms":{"type":"string","title":"Search Terms"},"identifier_kind":{"anyOf":[{"$ref":"#/components/schemas/IdentifierKind"},{"type":"null"}]},"identifier":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Identifier"},"keywords":{"items":{"type":"string"},"type":"array","title":"Keywords"}},"type":"object","required":["raw","intent","search_terms","identifier_kind","identifier","keywords"],"title":"ParsedQuery","description":"The user's raw input, interpreted.\n\n``search_terms`` is what actually gets sent to the upstream APIs: for a\npasted abstract that is a distilled keyword string, because no provider\naccepts a paragraph as a query. ``raw`` is preserved untouched because\nStage 2 embeds the full text for semantic ranking."},"QueryIntent":{"type":"string","enum":["topic","keyword","identifier","abstract_snippet"],"title":"QueryIntent","description":"What the user appears to have typed.\n\nThe four intents map onto the four input modes the product promises:\na topic, a keyword, an identifier lookup, or a pasted abstract."},"RankingReport":{"properties":{"applied":{"type":"boolean","title":"Applied"},"strategy":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Strategy"},"model":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Model"},"elapsed_ms":{"type":"integer","title":"Elapsed Ms","default":0},"reason":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Reason","description":"Why ranking did not run."}},"type":"object","required":["applied","strategy","model","elapsed_ms","reason"],"title":"RankingReport","description":"Whether relevance ranking ran, and with what.\n\nReported for the same reason source failures are: the frontend needs to\ntell a user \"these results are in retrieval order, not relevance order\"\nrather than silently presenting a worse list as if it were ranked."},"RelevanceScore":{"properties":{"combined":{"type":"number","maximum":1.0,"minimum":0.0,"title":"Combined","description":"Fused score, 0-1, for display."},"semantic":{"type":"number","title":"Semantic","description":"Raw cosine similarity of query and paper embeddings."},"lexical":{"type":"number","title":"Lexical","description":"Raw BM25 score, unbounded and corpus-relative."},"rank":{"type":"integer","minimum":1.0,"title":"Rank","description":"1-based position in the ranked result set."},"strategy":{"type":"string","title":"Strategy","description":"Fusion strategy that produced `combined`."}},"type":"object","required":["combined","semantic","lexical","rank","strategy"],"title":"RelevanceScore","description":"Why a paper ranked where it did.\n\nThe components are kept alongside the combined score, not discarded,\nfor two reasons: the UI shows a breakdown rather than an unexplained\nnumber, and an evaluation run can attribute a ranking change to the\nsignal that caused it."},"SearchRequest":{"properties":{"query":{"type":"string","maxLength":8000,"minLength":1,"title":"Query"},"limit_per_source":{"type":"integer","maximum":100.0,"minimum":1.0,"title":"Limit Per Source","default":20},"sources":{"anyOf":[{"items":{"$ref":"#/components/schemas/SourceName"},"type":"array"},{"type":"null"}],"title":"Sources","description":"Restrict the fan-out; defaults to every registered source."}},"type":"object","required":["query"],"title":"SearchRequest","description":"Inbound search parameters."},"SearchResponse":{"properties":{"query":{"$ref":"#/components/schemas/ParsedQuery"},"papers":{"items":{"$ref":"#/components/schemas/Paper"},"type":"array","title":"Papers"},"total":{"type":"integer","title":"Total"},"sources":{"items":{"$ref":"#/components/schemas/SourceReport"},"type":"array","title":"Sources"},"elapsed_ms":{"type":"integer","title":"Elapsed Ms"},"duplicates_merged":{"type":"integer","title":"Duplicates Merged","default":0},"ranking":{"$ref":"#/components/schemas/RankingReport"},"clusters":{"items":{"$ref":"#/components/schemas/TopicCluster"},"type":"array","title":"Clusters"},"clustering":{"$ref":"#/components/schemas/ClusteringReport"},"entities":{"$ref":"#/components/schemas/EnrichmentReport"},"summaries":{"$ref":"#/components/schemas/SummaryReport"},"cache":{"$ref":"#/components/schemas/CacheReport"}},"type":"object","required":["query","papers","total","sources","elapsed_ms","duplicates_merged","ranking","clusters","clustering","entities","summaries","cache"],"title":"SearchResponse","description":"Merged, deduplicated results plus the provenance of the fan-out."},"SourceInfo":{"properties":{"name":{"type":"string","title":"Name"},"display_name":{"type":"string","title":"Display Name"}},"type":"object","required":["name","display_name"],"title":"SourceInfo"},"SourceName":{"type":"string","enum":["pubmed","arxiv","crossref"],"title":"SourceName","description":"Identifier for an upstream literature provider."},"SourceReport":{"properties":{"source":{"$ref":"#/components/schemas/SourceName"},"status":{"$ref":"#/components/schemas/SourceStatus"},"returned":{"type":"integer","title":"Returned","default":0},"elapsed_ms":{"type":"integer","title":"Elapsed Ms","default":0},"message":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Message"}},"type":"object","required":["source","status","returned","elapsed_ms","message"],"title":"SourceReport","description":"Per-source diagnostics returned alongside every search."},"SourceStatus":{"type":"string","enum":["ok","empty","timeout","rate_limited","unavailable","parse_error","skipped"],"title":"SourceStatus","description":"Outcome of one source's contribution to a fan-out.\n\nThe frontend renders these directly: a partial result (\"no results from\nPubMed, showing arXiv and Crossref only\") is a legitimate, informative\nstate rather than an error."},"Summary":{"properties":{"text":{"type":"string","title":"Text"},"origin":{"$ref":"#/components/schemas/SummaryOrigin"},"grounding":{"$ref":"#/components/schemas/GroundingVerdict"},"model":{"type":"string","title":"Model","description":"Model or method that produced the text."},"prompt_version":{"type":"integer","title":"Prompt Version","default":1},"attempts":{"type":"integer","minimum":1.0,"title":"Attempts","description":"Generation attempts made.","default":1},"cached":{"type":"boolean","title":"Cached","default":false},"rejected_for":{"items":{"$ref":"#/components/schemas/GroundingIssue"},"type":"array","title":"Rejected For","description":"Why the first attempt was rejected, kept even when a retry rescued it. The final verdict says the text shown is sound; this says what it took to get there."}},"type":"object","required":["text","origin","grounding","model","prompt_version","attempts","cached","rejected_for"],"title":"Summary","description":"A paper summary, its provenance, and its grounding verdict."},"SummaryOrigin":{"type":"string","enum":["generated","regenerated","extractive"],"title":"SummaryOrigin","description":"Where the text a user is reading actually came from."},"SummaryReport":{"properties":{"applied":{"type":"boolean","title":"Applied"},"model":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Model"},"summarized":{"type":"integer","title":"Summarized","default":0},"from_cache":{"type":"integer","title":"From Cache","default":0},"regenerated":{"type":"integer","title":"Regenerated","description":"Summaries that needed a second attempt to pass.","default":0},"fell_back":{"type":"integer","title":"Fell Back","description":"Summaries that could not be grounded and were replaced.","default":0},"elapsed_ms":{"type":"integer","title":"Elapsed Ms","default":0},"reason":{"anyOf":[{"type":"string"},{"type":"null"}],"title":"Reason"}},"type":"object","required":["applied","model","summarized","from_cache","regenerated","fell_back","elapsed_ms","reason"],"title":"SummaryReport","description":"Per-search summarization diagnostics.\n\nMirrors the source, ranking and clustering reports: a stage that\ndegraded must say so rather than leave the UI guessing."},"TopicCluster":{"properties":{"id":{"type":"integer","minimum":0.0,"title":"Id"},"label":{"type":"string","title":"Label","description":"Short human-readable name, built from `terms`."},"terms":{"items":{"type":"string"},"type":"array","title":"Terms","description":"Distinctive terms, best first."},"paper_ids":{"items":{"type":"string"},"type":"array","title":"Paper Ids"}},"type":"object","required":["id","label","terms","paper_ids"],"title":"TopicCluster","description":"One sub-topic within a result set.\n\n``terms`` is what makes this usable in a UI: a cluster identified only\nby a number is no more navigable than the flat list it replaced, so\nevery cluster carries the terms that distinguish it from its siblings."},"ValidationError":{"properties":{"loc":{"items":{"anyOf":[{"type":"string"},{"type":"integer"}]},"type":"array","title":"Location"},"msg":{"type":"string","title":"Message"},"type":{"type":"string","title":"Error Type"}},"type":"object","required":["loc","msg","type"],"title":"ValidationError"}}}}
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "PaperPilot",
+    "summary": "AI-powered scientific literature search across PubMed, arXiv and Crossref.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Liveness and configured sources",
+        "description": "Report liveness plus which connectors this instance has registered.\n\nThe source list is part of the health payload because the frontend uses\nit to render source filters without hardcoding provider names.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/search": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search PubMed, arXiv and Crossref in one query",
+        "description": "Fan out to every source, merge, deduplicate, and report per-source status.",
+        "operationId": "search_api_search_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000,
+              "description": "Topic, keyword, DOI or abstract",
+              "title": "Q"
+            },
+            "description": "Topic, keyword, DOI or abstract"
+          },
+          {
+            "name": "limit_per_source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit Per Source"
+            }
+          },
+          {
+            "name": "sources",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceName"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sources"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search with a JSON body",
+        "description": "POST variant, for abstract snippets too long to sit in a query string.",
+        "operationId": "search_post_api_search_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/parse": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Show how a query would be interpreted",
+        "description": "Expose the query classifier so the UI can show the detected input type.",
+        "operationId": "parse_api_parse_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000,
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParsedQuery"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/export": {
+      "post": {
+        "tags": [
+          "export"
+        ],
+        "summary": "Export several papers as a citation file",
+        "description": "Render the selected papers in the requested citation format.\n\nPapers are looked up from the store rather than accepted in the\nrequest body, so a citation can only be produced for a record the\nserver actually retrieved.",
+        "operationId": "export_many_api_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/export/{paper_id}": {
+      "get": {
+        "tags": [
+          "export"
+        ],
+        "summary": "Export a single paper",
+        "description": "Render one paper. A GET so it can be a plain link in the UI.",
+        "operationId": "export_one_api_export__paper_id__get",
+        "parameters": [
+          {
+            "name": "paper_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Paper Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ExportFormat",
+              "default": "bibtex"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/export/formats/available": {
+      "get": {
+        "tags": [
+          "export"
+        ],
+        "summary": "List the supported citation formats",
+        "description": "Let the UI build its format picker without hardcoding the list.",
+        "operationId": "list_formats_api_export_formats_available_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response List Formats Api Export Formats Available Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Author": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "given": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Given"
+          },
+          "family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
+          "affiliation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affiliation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "given",
+          "family",
+          "affiliation"
+        ],
+        "title": "Author",
+        "description": "A paper author.\n\n``given``/``family`` are kept separate whenever the source provides them\nbecause citation formats (BibTeX, RIS) need the split. ``name`` is the\ndisplay form and is always populated."
+      },
+      "CacheReport": {
+        "properties": {
+          "hit": {
+            "type": "boolean",
+            "title": "Hit",
+            "default": false
+          },
+          "age_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Seconds",
+            "description": "How long ago the cached response was produced."
+          },
+          "ttl_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttl Seconds",
+            "description": "How long a cached response stays servable."
+          }
+        },
+        "type": "object",
+        "required": [
+          "hit",
+          "age_seconds",
+          "ttl_seconds"
+        ],
+        "title": "CacheReport",
+        "description": "Whether this response came from the search cache.\n\nReported rather than silent, for the same reason every other stage\nreports: this app's whole claim is that you can see what it did. A\ncache that quietly served four-minute-old results while the pipeline\npanel described a fan-out that did not happen would contradict that\ndirectly \u2014 and the age is exactly what a user needs to decide whether\nto care."
+      },
+      "ClusteringReport": {
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "algorithm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algorithm"
+          },
+          "clusters": {
+            "type": "integer",
+            "title": "Clusters",
+            "default": 0
+          },
+          "silhouette": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Silhouette"
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "title": "Elapsed Ms",
+            "default": 0
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Why clustering did not run."
+          }
+        },
+        "type": "object",
+        "required": [
+          "applied",
+          "algorithm",
+          "clusters",
+          "silhouette",
+          "elapsed_ms",
+          "reason"
+        ],
+        "title": "ClusteringReport",
+        "description": "Whether clustering ran, and how it went.\n\nMirrors ``RankingReport``: an enrichment that did not happen is a state\nthe UI has to render, not an error to swallow. A result set too small\nto cluster is normal, not a failure."
+      },
+      "EnrichmentReport": {
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "entities_found": {
+            "type": "integer",
+            "title": "Entities Found",
+            "default": 0
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "title": "Elapsed Ms",
+            "default": 0
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "applied",
+          "model",
+          "entities_found",
+          "elapsed_ms",
+          "reason"
+        ],
+        "title": "EnrichmentReport",
+        "description": "Whether entity extraction ran, and with what model.\n\nSame contract as the ranking and clustering reports: the frontend\nrenders \"entities unavailable\" differently from \"this paper has none\"."
+      },
+      "Entity": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Surface form, as it appears in the text."
+          },
+          "label": {
+            "$ref": "#/components/schemas/EntityLabel"
+          },
+          "raw_label": {
+            "type": "string",
+            "title": "Raw Label",
+            "description": "The label the underlying model emitted."
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/EntitySpan"
+            },
+            "type": "array",
+            "title": "Spans"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "label",
+          "raw_label",
+          "spans"
+        ],
+        "title": "Entity",
+        "description": "A distinct entity mentioned in a paper, with all its occurrences."
+      },
+      "EntityLabel": {
+        "type": "string",
+        "enum": [
+          "gene_or_protein",
+          "disease",
+          "chemical",
+          "organism",
+          "anatomy",
+          "cell_type",
+          "technical_term",
+          "organization",
+          "person",
+          "location",
+          "other"
+        ],
+        "title": "EntityLabel",
+        "description": "Entity categories, normalized across NER models.\n\nDifferent models emit wildly different label sets \u2014 ``en_core_web_sm``\nis trained on news (ORG, PERSON, GPE), while SciSpacy models emit\nbiomedical types (DISEASE, CHEMICAL, GENE_OR_GENE_PRODUCT). Everything\nis mapped onto this enum so the API contract and the UI do not change\nwhen the underlying model does."
+      },
+      "EntitySpan": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "title",
+              "abstract"
+            ],
+            "title": "Field"
+          },
+          "start": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "start",
+          "end"
+        ],
+        "title": "EntitySpan",
+        "description": "One occurrence of an entity, as character offsets into a field."
+      },
+      "ExportFormat": {
+        "type": "string",
+        "enum": [
+          "bibtex",
+          "ris",
+          "apa",
+          "vancouver"
+        ],
+        "title": "ExportFormat",
+        "description": "Formats a user can ask for.\n\nAPA and Vancouver are separate members rather than a style parameter\non one member: from the caller's point of view they are two different\nthings to click, and modelling them as one format with a modifier\npushes that distinction into every caller."
+      },
+      "ExportRequest": {
+        "properties": {
+          "paper_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Paper Ids"
+          },
+          "format": {
+            "$ref": "#/components/schemas/ExportFormat",
+            "default": "bibtex"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename",
+            "description": "Base name for the download, without extension."
+          }
+        },
+        "type": "object",
+        "required": [
+          "paper_ids"
+        ],
+        "title": "ExportRequest",
+        "description": "A bulk export of previously retrieved papers."
+      },
+      "GroundingIssue": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/IssueKind"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Human-readable explanation, safe to show a user."
+          },
+          "severity": {
+            "$ref": "#/components/schemas/IssueSeverity",
+            "default": "blocking"
+          },
+          "span": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Span",
+            "description": "The offending text from the summary, if localizable."
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "detail",
+          "severity",
+          "span"
+        ],
+        "title": "GroundingIssue",
+        "description": "One specific, located problem found in a summary."
+      },
+      "GroundingStatus": {
+        "type": "string",
+        "enum": [
+          "grounded",
+          "ungrounded",
+          "unverifiable"
+        ],
+        "title": "GroundingStatus",
+        "description": "Outcome of checking a summary against its source abstract."
+      },
+      "GroundingVerdict": {
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/GroundingStatus"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/GroundingIssue"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "overlap": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Overlap",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "issues",
+          "overlap"
+        ],
+        "title": "GroundingVerdict",
+        "description": "The full result of checking one summary against one abstract."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "app": {
+            "type": "string",
+            "title": "App"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceInfo"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "app",
+          "environment",
+          "sources"
+        ],
+        "title": "HealthResponse"
+      },
+      "IdentifierKind": {
+        "type": "string",
+        "enum": [
+          "doi",
+          "arxiv",
+          "pmid"
+        ],
+        "title": "IdentifierKind"
+      },
+      "IssueKind": {
+        "type": "string",
+        "enum": [
+          "fabricated_number",
+          "fabricated_entity",
+          "low_overlap",
+          "contradicted_direction",
+          "overclaim",
+          "unsupported_claim",
+          "format"
+        ],
+        "title": "IssueKind",
+        "description": "The specific way a summary failed to trace back to its abstract.\n\nKept as a closed vocabulary rather than free text so the failures can\nbe counted, tested, and shown in the UI as a reason rather than a\ngeneric warning."
+      },
+      "IssueSeverity": {
+        "type": "string",
+        "enum": [
+          "blocking",
+          "advisory"
+        ],
+        "title": "IssueSeverity",
+        "description": "Whether an issue rejects a summary or merely annotates it.\n\nThe split is earned by measurement, not taste. The lexical rules have a\n0.8% false-positive rate, so a summary that trips one is almost\ncertainly wrong and replacing it is right.\n\nThe semantic support check is far noisier, because a genuinely\nabstractive summary and a recombined claim look much alike to a\nsimilarity threshold. Measured against live generation on 94 papers, a\nthreshold strict enough to catch most recombinations (0.70) cautions\n**43.6%** of perfectly good summaries; the shipped 0.50 cautions 5% and\ncatches 61%. Blocking on a signal that noisy would destroy more good\nsummaries than it saves bad ones \u2014 so it annotates instead, and the\nreader is told which sentence to look at twice."
+      },
+      "Paper": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Stable fingerprint, derived from DOI or source id."
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi",
+            "description": "Lowercased, bare DOI (no URL prefix)."
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceName",
+            "description": "Provider this record was retrieved from."
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id",
+            "description": "Provider-native identifier (PMID, arXiv id, DOI)."
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "authors": {
+            "items": {
+              "$ref": "#/components/schemas/Author"
+            },
+            "type": "array",
+            "title": "Authors"
+          },
+          "abstract": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Abstract"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Date"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "journal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Journal"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume"
+          },
+          "issue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue"
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pages"
+          },
+          "publication_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publication Type"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          },
+          "pdf_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pdf Url"
+          },
+          "citation_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation Count"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelevanceScore"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Summary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "AI or extractive summary, carrying its own grounding verdict."
+          },
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/Entity"
+            },
+            "type": "array",
+            "title": "Entities",
+            "description": "Named entities found in the title and abstract, with spans."
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Id",
+            "description": "Index of the topic cluster this paper was assigned to."
+          },
+          "also_found_in": {
+            "items": {
+              "$ref": "#/components/schemas/SourceName"
+            },
+            "type": "array",
+            "title": "Also Found In",
+            "description": "Other sources that returned this same work."
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "doi",
+          "source",
+          "source_id",
+          "title",
+          "authors",
+          "abstract",
+          "published_date",
+          "url",
+          "journal",
+          "publisher",
+          "volume",
+          "issue",
+          "pages",
+          "publication_type",
+          "keywords",
+          "pdf_url",
+          "citation_count",
+          "score",
+          "summary",
+          "entities",
+          "cluster_id",
+          "also_found_in"
+        ],
+        "title": "Paper",
+        "description": "A single scientific work, normalized across all sources.\n\nOptionality is deliberate and pervasive: real-world records routinely\nlack an abstract, a DOI, or a usable publication date, and the pipeline\nmust degrade gracefully rather than drop those records."
+      },
+      "ParsedQuery": {
+        "properties": {
+          "raw": {
+            "type": "string",
+            "title": "Raw"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/QueryIntent"
+          },
+          "search_terms": {
+            "type": "string",
+            "title": "Search Terms"
+          },
+          "identifier_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IdentifierKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "identifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identifier"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Keywords"
+          }
+        },
+        "type": "object",
+        "required": [
+          "raw",
+          "intent",
+          "search_terms",
+          "identifier_kind",
+          "identifier",
+          "keywords"
+        ],
+        "title": "ParsedQuery",
+        "description": "The user's raw input, interpreted.\n\n``search_terms`` is what actually gets sent to the upstream APIs: for a\npasted abstract that is a distilled keyword string, because no provider\naccepts a paragraph as a query. ``raw`` is preserved untouched because\nStage 2 embeds the full text for semantic ranking."
+      },
+      "QueryIntent": {
+        "type": "string",
+        "enum": [
+          "topic",
+          "keyword",
+          "identifier",
+          "abstract_snippet"
+        ],
+        "title": "QueryIntent",
+        "description": "What the user appears to have typed.\n\nThe four intents map onto the four input modes the product promises:\na topic, a keyword, an identifier lookup, or a pasted abstract."
+      },
+      "RankingReport": {
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "title": "Elapsed Ms",
+            "default": 0
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Why ranking did not run."
+          }
+        },
+        "type": "object",
+        "required": [
+          "applied",
+          "strategy",
+          "model",
+          "elapsed_ms",
+          "reason"
+        ],
+        "title": "RankingReport",
+        "description": "Whether relevance ranking ran, and with what.\n\nReported for the same reason source failures are: the frontend needs to\ntell a user \"these results are in retrieval order, not relevance order\"\nrather than silently presenting a worse list as if it were ranked."
+      },
+      "RelevanceScore": {
+        "properties": {
+          "combined": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Combined",
+            "description": "Fused score, 0-1, for display."
+          },
+          "semantic": {
+            "type": "number",
+            "title": "Semantic",
+            "description": "Raw cosine similarity of query and paper embeddings."
+          },
+          "lexical": {
+            "type": "number",
+            "title": "Lexical",
+            "description": "Raw BM25 score, unbounded and corpus-relative."
+          },
+          "rank": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Rank",
+            "description": "1-based position in the ranked result set."
+          },
+          "strategy": {
+            "type": "string",
+            "title": "Strategy",
+            "description": "Fusion strategy that produced `combined`."
+          }
+        },
+        "type": "object",
+        "required": [
+          "combined",
+          "semantic",
+          "lexical",
+          "rank",
+          "strategy"
+        ],
+        "title": "RelevanceScore",
+        "description": "Why a paper ranked where it did.\n\nThe components are kept alongside the combined score, not discarded,\nfor two reasons: the UI shows a breakdown rather than an unexplained\nnumber, and an evaluation run can attribute a ranking change to the\nsignal that caused it."
+      },
+      "SearchRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Query"
+          },
+          "limit_per_source": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit Per Source",
+            "default": 20
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SourceName"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sources",
+            "description": "Restrict the fan-out; defaults to every registered source."
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
+        "description": "Inbound search parameters."
+      },
+      "SearchResponse": {
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/ParsedQuery"
+          },
+          "papers": {
+            "items": {
+              "$ref": "#/components/schemas/Paper"
+            },
+            "type": "array",
+            "title": "Papers"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceReport"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "title": "Elapsed Ms"
+          },
+          "duplicates_merged": {
+            "type": "integer",
+            "title": "Duplicates Merged",
+            "default": 0
+          },
+          "ranking": {
+            "$ref": "#/components/schemas/RankingReport"
+          },
+          "clusters": {
+            "items": {
+              "$ref": "#/components/schemas/TopicCluster"
+            },
+            "type": "array",
+            "title": "Clusters"
+          },
+          "clustering": {
+            "$ref": "#/components/schemas/ClusteringReport"
+          },
+          "entities": {
+            "$ref": "#/components/schemas/EnrichmentReport"
+          },
+          "summaries": {
+            "$ref": "#/components/schemas/SummaryReport"
+          },
+          "cache": {
+            "$ref": "#/components/schemas/CacheReport"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "papers",
+          "total",
+          "sources",
+          "elapsed_ms",
+          "duplicates_merged",
+          "ranking",
+          "clusters",
+          "clustering",
+          "entities",
+          "summaries",
+          "cache"
+        ],
+        "title": "SearchResponse",
+        "description": "Merged, deduplicated results plus the provenance of the fan-out."
+      },
+      "SourceInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "display_name"
+        ],
+        "title": "SourceInfo"
+      },
+      "SourceName": {
+        "type": "string",
+        "enum": [
+          "pubmed",
+          "arxiv",
+          "crossref"
+        ],
+        "title": "SourceName",
+        "description": "Identifier for an upstream literature provider."
+      },
+      "SourceReport": {
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/SourceName"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SourceStatus"
+          },
+          "returned": {
+            "type": "integer",
+            "title": "Returned",
+            "default": 0
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "title": "Elapsed Ms",
+            "default": 0
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "status",
+          "returned",
+          "elapsed_ms",
+          "message"
+        ],
+        "title": "SourceReport",
+        "description": "Per-source diagnostics returned alongside every search."
+      },
+      "SourceStatus": {
+        "type": "string",
+        "enum": [
+          "ok",
+          "empty",
+          "timeout",
+          "rate_limited",
+          "unavailable",
+          "parse_error",
+          "skipped"
+        ],
+        "title": "SourceStatus",
+        "description": "Outcome of one source's contribution to a fan-out.\n\nThe frontend renders these directly: a partial result (\"no results from\nPubMed, showing arXiv and Crossref only\") is a legitimate, informative\nstate rather than an error."
+      },
+      "Summary": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/SummaryOrigin"
+          },
+          "grounding": {
+            "$ref": "#/components/schemas/GroundingVerdict"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model",
+            "description": "Model or method that produced the text."
+          },
+          "prompt_version": {
+            "type": "integer",
+            "title": "Prompt Version",
+            "default": 1
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Attempts",
+            "description": "Generation attempts made.",
+            "default": 1
+          },
+          "cached": {
+            "type": "boolean",
+            "title": "Cached",
+            "default": false
+          },
+          "rejected_for": {
+            "items": {
+              "$ref": "#/components/schemas/GroundingIssue"
+            },
+            "type": "array",
+            "title": "Rejected For",
+            "description": "Why the first attempt was rejected, kept even when a retry rescued it. The final verdict says the text shown is sound; this says what it took to get there."
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "origin",
+          "grounding",
+          "model",
+          "prompt_version",
+          "attempts",
+          "cached",
+          "rejected_for"
+        ],
+        "title": "Summary",
+        "description": "A paper summary, its provenance, and its grounding verdict."
+      },
+      "SummaryOrigin": {
+        "type": "string",
+        "enum": [
+          "generated",
+          "regenerated",
+          "extractive"
+        ],
+        "title": "SummaryOrigin",
+        "description": "Where the text a user is reading actually came from."
+      },
+      "SummaryReport": {
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "summarized": {
+            "type": "integer",
+            "title": "Summarized",
+            "default": 0
+          },
+          "from_cache": {
+            "type": "integer",
+            "title": "From Cache",
+            "default": 0
+          },
+          "regenerated": {
+            "type": "integer",
+            "title": "Regenerated",
+            "description": "Summaries that needed a second attempt to pass.",
+            "default": 0
+          },
+          "fell_back": {
+            "type": "integer",
+            "title": "Fell Back",
+            "description": "Summaries that could not be grounded and were replaced.",
+            "default": 0
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "title": "Elapsed Ms",
+            "default": 0
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "applied",
+          "model",
+          "summarized",
+          "from_cache",
+          "regenerated",
+          "fell_back",
+          "elapsed_ms",
+          "reason"
+        ],
+        "title": "SummaryReport",
+        "description": "Per-search summarization diagnostics.\n\nMirrors the source, ranking and clustering reports: a stage that\ndegraded must say so rather than leave the UI guessing."
+      },
+      "TopicCluster": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Short human-readable name, built from `terms`."
+          },
+          "terms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Terms",
+            "description": "Distinctive terms, best first."
+          },
+          "paper_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paper Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "terms",
+          "paper_ids"
+        ],
+        "title": "TopicCluster",
+        "description": "One sub-topic within a result set.\n\n``terms`` is what makes this usable in a UI: a cluster identified only\nby a number is no more navigable than the flat list it replaced, so\nevery cluster carries the terms that distinguish it from its siblings."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
