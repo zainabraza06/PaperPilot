@@ -77,6 +77,19 @@ than editing a tracked file:
 VITE_API_PROXY=http://127.0.0.1:8010 npm run dev
 ```
 
+### Deploying it
+
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) covers this properly, starting from the
+measurement that decides everything: the backend holds a sentence-transformer, spaCy
+and torch resident, so it sits at **513 MB idle and peaks at 865 MB** during a search.
+That rules out every serverless-function platform and the 512 MB free tiers — which
+start fine, serve `/health`, and then OOM on the first real query.
+
+The short version: **Hugging Face Spaces** for the backend (free, no card, 16 GB) and
+**Vercel** for the frontend, or **Cloud Run** if you want real autoscaling. Anything
+that runs Docker Compose needs no configuration at all, because the app is
+same-origin there.
+
 ### Without the frontend
 
 Every stage is exercisable from the command line, which is the fastest way
@@ -1262,7 +1275,7 @@ overclaim.
 
 ```bash
 cd backend
-python -m pytest          # 440 tests
+python -m pytest          # 449 tests
 python -m ruff check app tests
 python -m mypy app scripts
 

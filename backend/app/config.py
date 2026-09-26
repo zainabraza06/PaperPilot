@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -26,7 +28,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
-    cors_origins: str | list[str] = Field(
+    cors_origins: Annotated[list[str], NoDecode] = Field(
         default=["http://localhost:5173", "http://127.0.0.1:5173"],
         description=(
             "Origins allowed to call the API from a browser. Accepts a "
@@ -47,14 +49,26 @@ class Settings(BaseSettings):
         about JSON decoding and no mention of the variable the operator
         actually set.
 
+        ``NoDecode`` on the annotation is what makes this validator
+        reachable at all. Without it the JSON decode happens inside the
+        environment *source*, before any validator runs, so a
+        ``mode="before"`` hook never sees the value and the crash is
+        unchanged. Worth naming, because the obvious fix looks correct and
+        silently does nothing.
+
         A deploy-time footgun that costs an hour of confusion is worth
         eight lines of parsing. JSON still works, so nothing that already
         set the variable correctly has to change.
         """
         if isinstance(value, str):
             text = value.strip()
-            if not text.startswith("["):
-                return [item.strip() for item in text.split(",") if item.strip()]
+            # NoDecode turned the JSON decoding off for everyone, so this
+            # has to handle the JSON form too rather than only the new one.
+            # Silently falling through to the comma split would turn
+            # '["a","b"]' into three pieces of punctuation.
+            if text.startswith("["):
+                return json.loads(text)
+            return [item.strip() for item in text.split(",") if item.strip()]
         return value
 
     # --- shared HTTP behaviour ------------------------------------------
