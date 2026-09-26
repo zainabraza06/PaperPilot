@@ -3,14 +3,46 @@
 AI-powered scientific literature search across **PubMed**, **arXiv** and **Crossref** —
 one query, one ranked list, AI summaries, one-click citation export.
 
-> **Status: all seven stages complete.** Multi-source retrieval, hybrid
-> ranking with measured Recall@k / NDCG@k, NER and topic clustering,
-> grounded summarization with a measured fact-checking layer, spec-correct
-> citation export, a React frontend verified by driving a real browser and
-> audited against WCAG 2.2 AA, and Docker packaging.
+> **Status: complete and measured.** Multi-source retrieval, hybrid ranking, NER and
+> topic clustering, grounded summarization with a fact-checking layer, spec-correct
+> citation export, a React frontend driven by a real browser, Docker packaging.
+
+## What is actually interesting here
+
+Every "AI-powered search" project claims relevance and summarization. This one
+measures both, and reports the results that came out badly:
+
+- **Ranking is evaluated on a hand-judged golden set** — 20 queries, 411 candidates,
+  every one graded 0–3. The shipped improvement was picked by **paired bootstrap**:
+  the biggest number in the sweep was NDCG@5 **+0.038** with a confidence interval of
+  [−0.011, +0.105] on a 6–4 split, so it was discarded in favour of **+0.014
+  [+0.004, +0.025]** on a 10–3 split. The small real effect, not the large noisy one.
+
+- **The grounding check was blind to a whole class of fabrication**, and that was
+  measured rather than assumed: claims recombined from the abstract's own sentences
+  slipped past all six lexical rules **934 times out of 934**. A semantic support
+  check took it to **61.3%** — still missing two in five, which is stated wherever
+  the number appears.
+
+- **Summary quality is compared against baselines, and the LLM loses one of them.**
+  Generated summaries rewrite genuinely (70.6% novel bigrams against the extractive
+  baseline's 1.9%) and read the whole abstract rather than its opening — and carry
+  **~10% less of it** than simply taking three sentences. A prompt revision aimed at
+  that gap moved coverage 0.658 → 0.658 and was reverted.
+
+- **The palette is audited, not eyeballed.** A script scores all 24 colour pairings
+  against WCAG 2.2 in both themes and **gates the build**. It caught three real
+  failures on first run, including control borders at 1.5:1 where 1.4.11 asks for 3.
+
+- **Four UI defects shipped past a green Playwright run** and were found by opening
+  the screenshots — including a detail modal that rendered fully transparent in dark
+  mode while `[role="dialog"]` was still, technically, visible.
+
+Several measured ideas did not pay off and are kept as negative results: bigram BM25,
+a coverage-focused prompt rewrite, and the honest reading that hybrid ranking beats
+semantic-alone by about a point, which is inside the noise on 20 queries.
 
 ---
-
 
 
 ## The problem
